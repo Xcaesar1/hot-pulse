@@ -116,7 +116,7 @@ export function HotspotBoard({
   const [expandedReasoningIds, setExpandedReasoningIds] = useState<string[]>([]);
 
   const resolvedExpandedHotspotId =
-    expandedHotspotId && pagedHotspots.some((item) => item.id === expandedHotspotId) ? expandedHotspotId : pagedHotspots[0]?.id ?? null;
+    expandedHotspotId && pagedHotspots.some((item) => item.id === expandedHotspotId) ? expandedHotspotId : null;
 
   const visibleReasoningIds = pagedHotspots.filter((item) => hasAnyReasoning(item)).map((item) => item.id);
   const allReasoningsExpanded =
