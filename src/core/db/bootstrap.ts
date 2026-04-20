@@ -62,6 +62,7 @@ async function createTables() {
       novelty_score INTEGER NOT NULL DEFAULT 0,
       source_diversity_score INTEGER NOT NULL DEFAULT 0,
       source_authority_score INTEGER NOT NULL DEFAULT 0,
+      source_reliability_score INTEGER NOT NULL DEFAULT 0,
       velocity_score INTEGER NOT NULL DEFAULT 0,
       final_score INTEGER NOT NULL DEFAULT 0,
       evidence_count INTEGER NOT NULL DEFAULT 0,
@@ -77,12 +78,15 @@ async function createTables() {
       candidate_id TEXT NOT NULL,
       source_key TEXT NOT NULL,
       source_label TEXT NOT NULL,
+      evidence_family TEXT NOT NULL DEFAULT 'search_discovery',
+      discovery_source TEXT NOT NULL DEFAULT 'unknown',
       url TEXT NOT NULL,
       title TEXT NOT NULL,
       snippet TEXT NOT NULL DEFAULT '',
       author TEXT,
       published_at TEXT,
       weight INTEGER NOT NULL DEFAULT 1,
+      quality_score INTEGER NOT NULL DEFAULT 0,
       UNIQUE(hotspot_id, candidate_id)
     )`,
     `CREATE TABLE IF NOT EXISTS notifications (
@@ -111,6 +115,24 @@ async function createTables() {
 
   for (const statement of statements) {
     await client.execute(statement);
+  }
+
+  const alterStatements = [
+    `ALTER TABLE hotspots ADD COLUMN source_reliability_score INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE hotspot_evidences ADD COLUMN evidence_family TEXT NOT NULL DEFAULT 'search_discovery'`,
+    `ALTER TABLE hotspot_evidences ADD COLUMN discovery_source TEXT NOT NULL DEFAULT 'unknown'`,
+    `ALTER TABLE hotspot_evidences ADD COLUMN quality_score INTEGER NOT NULL DEFAULT 0`
+  ];
+
+  for (const statement of alterStatements) {
+    try {
+      await client.execute(statement);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (!message.includes("duplicate column")) {
+        throw error;
+      }
+    }
   }
 }
 
@@ -157,6 +179,7 @@ async function seedDefaults() {
     );
   } else {
     const sourceRows = await db.select().from(sources);
+    const existingKeys = new Set(sourceRows.map((row) => row.key));
     for (const row of sourceRows) {
       const defaultSource = defaultSourceMap.get(row.key);
       if (!defaultSource) continue;
@@ -170,9 +193,18 @@ async function seedDefaults() {
 
       const shouldRepairTwitter =
         row.key === "twitter-api" &&
-        (!("userFetchLimit" in currentConfig) || !("backoffMs" in currentConfig) || String(currentConfig.usernames ?? "").includes("vercel"));
+        (!("userFetchLimit" in currentConfig) ||
+          !("backoffMs" in currentConfig) ||
+          !("minLikes" in currentConfig) ||
+          !("minRetweets" in currentConfig) ||
+          !("queryType" in currentConfig) ||
+          String(currentConfig.usernames ?? "").includes("vercel"));
 
-      if (shouldRepairCustomRss || shouldRepairTwitter) {
+      const shouldRepairSearchSizing =
+        (row.key === "duckduckgo-search" && Number(currentConfig.maxResults ?? 0) <= 4) ||
+        (row.key === "google-news-rss" && Number(currentConfig.maxResults ?? 0) <= 6);
+
+      if (shouldRepairCustomRss || shouldRepairTwitter || shouldRepairSearchSizing) {
         await db
           .update(sources)
           .set({
@@ -180,6 +212,24 @@ async function seedDefaults() {
             updatedAt: nowIso()
           })
           .where(eq(sources.id, row.id));
+      }
+    }
+
+    for (const source of defaultSources()) {
+      if (!existingKeys.has(source.key)) {
+        await db.insert(sources).values({
+          id: source.id,
+          key: source.key,
+          label: source.label,
+          kind: source.kind,
+          enabled: source.enabled,
+          config: toJson(source.config),
+          lastStatus: source.lastStatus,
+          lastRunAt: source.lastRunAt,
+          errorMessage: source.errorMessage,
+          createdAt: source.createdAt,
+          updatedAt: source.updatedAt
+        });
       }
     }
   }

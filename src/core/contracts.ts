@@ -3,6 +3,7 @@ export type SourceKind = "search" | "social" | "structured" | "custom";
 export type NotificationLevel = "high" | "medium" | "low";
 export type NotifyChannel = "inbox" | "email";
 export type ScanTrigger = "manual" | "scheduled" | "api";
+export type EvidenceFamily = "search_discovery" | "social" | "community" | "official";
 
 export interface MonitorRecord {
   id: string;
@@ -60,12 +61,15 @@ export interface AIAnalysisResult {
 export interface HotspotEvidenceRecord {
   sourceKey: string;
   sourceLabel: string;
+  evidenceFamily: EvidenceFamily;
+  discoverySource: string;
   url: string;
   title: string;
   snippet: string;
   author: string | null;
   publishedAt: string | null;
   weight: number;
+  qualityScore: number;
 }
 
 export interface HotspotView {
@@ -80,6 +84,7 @@ export interface HotspotView {
   noveltyScore: number;
   sourceDiversityScore: number;
   sourceAuthorityScore: number;
+  sourceReliabilityScore: number;
   velocityScore: number;
   finalScore: number;
   evidenceCount: number;

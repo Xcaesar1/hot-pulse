@@ -1,4 +1,5 @@
 import type { SourceAdapter } from "@/core/sources/base";
+import { bingSearchAdapter } from "@/core/sources/bing-search";
 import { customRssAdapter } from "@/core/sources/custom-rss";
 import { duckDuckGoAdapter } from "@/core/sources/duckduckgo";
 import { githubReleasesAdapter } from "@/core/sources/github-releases";
@@ -10,6 +11,7 @@ import { twitterApiAdapter } from "@/core/sources/twitter-api";
 const adapters = [
   duckDuckGoAdapter,
   googleNewsAdapter,
+  bingSearchAdapter,
   twitterApiAdapter,
   hackerNewsAdapter,
   redditAdapter,

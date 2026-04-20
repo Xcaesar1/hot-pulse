@@ -6,46 +6,49 @@ import { domainFromUrl, normalizeCanonicalUrl, normalizeText, truncate } from "@
 
 const parser = new Parser();
 
-export const googleNewsAdapter: SourceAdapter = {
-  key: "google-news-rss",
+export const bingSearchAdapter: SourceAdapter = {
+  key: "bing-search",
   async fetch(context: SourceFetchContext): Promise<CandidateDocument[]> {
-    const maxResults = Number(context.source.config.maxResults ?? 10);
-    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(context.monitor.query)}&hl=en-US&gl=US&ceid=US:en`;
-    const feed = await parser.parseURL(url);
-    const items: CandidateDocument[] = [];
+    const mode = String(context.source.config.mode ?? "news");
+    const maxResults = Number(context.source.config.maxResults ?? 8);
+    const feedUrl =
+      mode === "web"
+        ? `https://www.bing.com/search?q=${encodeURIComponent(context.monitor.query)}&format=rss&setlang=en-US`
+        : `https://www.bing.com/news/search?q=${encodeURIComponent(context.monitor.query)}&format=rss&setlang=en-US`;
+    const feed = await parser.parseURL(feedUrl);
+    const results: CandidateDocument[] = [];
 
     for (const [index, item] of (feed.items ?? []).slice(0, maxResults).entries()) {
-      const rawUrl = item.link || "";
-      const article = rawUrl ? await extractArticle(rawUrl).catch(() => null) : null;
+      const rawUrl = item.link || feed.link || "";
+      if (!rawUrl) continue;
+      const article = await extractArticle(rawUrl).catch(() => null);
       const canonicalUrl = article?.canonicalUrl || normalizeCanonicalUrl(rawUrl);
 
-      items.push({
+      results.push({
         sourceKey: context.source.key,
         sourceLabel: context.source.label,
         sourceKind: context.source.kind,
         externalId: item.guid || item.id || canonicalUrl || `${context.monitor.query}-${index}`,
-        title: normalizeText(article?.title || item.title || "Untitled Google News item"),
+        title: normalizeText(article?.title || item.title || "Untitled Bing result"),
         url: canonicalUrl,
-        snippet: truncate(normalizeText(article?.text || item.contentSnippet || item.content || ""), 220),
-        content: truncate(normalizeText(article?.text || item.contentSnippet || item.content || item.title || ""), 1600),
+        snippet: truncate(normalizeText(article?.text || item.contentSnippet || item.title || ""), 220),
+        content: truncate(normalizeText(article?.text || item.contentSnippet || item.title || ""), 1600),
         author: item.creator ? normalizeText(item.creator) : null,
         publishedAt: item.isoDate || item.pubDate || null,
         metadata: {
-          query: context.monitor.query,
-          categories: item.categories ?? [],
-          discoveryEngine: "google-news",
+          discoveryEngine: "bing-news",
           evidenceFamily: "search_discovery",
           canonicalUrl,
           canonicalDomain: domainFromUrl(canonicalUrl),
           qualitySignals: {
             rank: index + 1,
             extracted: Boolean(article),
-            score: Math.max(40, 76 - index * 4 + (article ? 8 : 0))
+            score: Math.max(36, 72 - index * 4 + (article ? 8 : 0))
           }
         }
       });
     }
 
-    return items;
+    return results;
   }
 };

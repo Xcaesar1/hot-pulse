@@ -1,6 +1,7 @@
 import { analyzeCandidate } from "@/core/ai/openrouter";
 import { buildHotspotFingerprint, computeScores } from "@/core/analysis/scoring";
 import type { CandidateDocument, HotspotEvidenceRecord, HotspotView, MonitorRecord, ScanTrigger, SourceRecord } from "@/core/contracts";
+import { getCandidateCanonicalUrl, getEvidenceFamily, getEvidenceIdentity, getEvidenceQuality } from "@/core/source-signals";
 import {
   completeScanRun,
   createScanRun,
@@ -24,7 +25,7 @@ interface PendingHotspot {
   analyses: number[];
   risk: number[];
   novelty: number[];
-  evidence: HotspotEvidenceRecord[];
+  evidence: Map<string, HotspotEvidenceRecord>;
   monitorLabels: string[];
   suggestedNotify: Array<HotspotView["notifyLevel"]>;
 }
@@ -97,33 +98,40 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
           const evidence: HotspotEvidenceRecord = {
             sourceKey: document.sourceKey,
             sourceLabel: document.sourceLabel,
-            url: document.url,
+            evidenceFamily: getEvidenceFamily(document.sourceKey),
+            discoverySource: String(document.metadata.discoveryEngine ?? document.sourceKey),
+            url: getCandidateCanonicalUrl(document),
             title: document.title,
             snippet: document.snippet,
             author: document.author,
             publishedAt: document.publishedAt,
-            weight: 1
+            weight: 1,
+            qualityScore: getEvidenceQuality(document)
           };
 
           const pending = buckets.get(fingerprint) ?? {
             title: document.title,
-            canonicalUrl: document.url,
+            canonicalUrl: getCandidateCanonicalUrl(document),
             summary: analysis.summary,
             analyses: [],
             risk: [],
             novelty: [],
-            evidence: [],
+            evidence: new Map<string, HotspotEvidenceRecord>(),
             monitorLabels: [],
             suggestedNotify: []
           };
 
           pending.title = pending.title.length >= document.title.length ? pending.title : document.title;
-          pending.canonicalUrl = pending.canonicalUrl || document.url;
+          pending.canonicalUrl = pending.canonicalUrl || getCandidateCanonicalUrl(document);
           pending.summary = pending.summary.length >= analysis.summary.length ? pending.summary : analysis.summary;
           pending.analyses.push(analysis.relevanceScore);
           pending.risk.push(analysis.credibilityRisk);
           pending.novelty.push(analysis.noveltyScore);
-          pending.evidence.push(evidence);
+          const evidenceIdentity = getEvidenceIdentity(evidence);
+          const existingEvidence = pending.evidence.get(evidenceIdentity);
+          if (!existingEvidence || evidence.qualityScore > existingEvidence.qualityScore) {
+            pending.evidence.set(evidenceIdentity, evidence);
+          }
           pending.monitorLabels = [...new Set([...pending.monitorLabels, monitor.label])];
           pending.suggestedNotify.push(analysis.suggestedNotify);
           buckets.set(fingerprint, pending);
@@ -140,10 +148,11 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
               noveltyScore: 0,
               sourceDiversityScore: 0,
               sourceAuthorityScore: 0,
+              sourceReliabilityScore: 0,
               velocityScore: 0,
               finalScore: 0,
               monitorLabels: pending.monitorLabels,
-              evidenceCount: pending.evidence.length,
+              evidenceCount: pending.evidence.size,
               metadata: {
                 provisional: true,
                 lastProcessedAt: nowIso()
@@ -158,6 +167,7 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
 
     for (const [fingerprint, pending] of buckets) {
       const avg = (values: number[]) => Math.round(values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1));
+      const evidenceList = [...pending.evidence.values()];
       const scores = computeScores({
         analysis: {
           isRelevant: true,
@@ -168,7 +178,7 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
           reasoning: "Merged multi-source evidence",
           suggestedNotify: pending.suggestedNotify.includes("high") ? "high" : pending.suggestedNotify.includes("medium") ? "medium" : "low"
         },
-        evidence: pending.evidence
+        evidence: evidenceList
       });
 
       await upsertHotspot({
@@ -182,12 +192,14 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
         noveltyScore: avg(pending.novelty),
         sourceDiversityScore: scores.sourceDiversityScore,
         sourceAuthorityScore: scores.sourceAuthorityScore,
+        sourceReliabilityScore: scores.sourceReliabilityScore,
         velocityScore: scores.velocityScore,
         finalScore: scores.finalScore,
         monitorLabels: pending.monitorLabels,
-        evidenceCount: pending.evidence.length,
+        evidenceCount: evidenceList.length,
         metadata: {
-          evidenceSources: [...new Set(pending.evidence.map((item) => item.sourceKey))],
+          evidenceSources: [...new Set(evidenceList.map((item) => item.sourceKey))],
+          evidenceFamilies: [...new Set(evidenceList.map((item) => item.evidenceFamily))],
           mergedAt: nowIso()
         }
       });

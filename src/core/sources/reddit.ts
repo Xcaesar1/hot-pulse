@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import type { CandidateDocument } from "@/core/contracts";
 import type { SourceAdapter, SourceFetchContext } from "@/core/sources/base";
-import { normalizeText, truncate } from "@/core/utils";
+import { domainFromUrl, normalizeCanonicalUrl, normalizeText, truncate } from "@/core/utils";
 
 interface RedditChild {
   data: {
@@ -36,14 +36,20 @@ async function fetchRssFallback(context: SourceFetchContext, maxResults: number)
           sourceKind: context.source.kind,
           externalId: item.id || item.guid || `${subreddit}-${item.link}`,
           title: normalizeText(item.title || `r/${subreddit}`),
-          url: item.link || `https://www.reddit.com/r/${subreddit}/new/`,
+          url: normalizeCanonicalUrl(item.link || `https://www.reddit.com/r/${subreddit}/new/`),
           snippet: truncate(content, 220),
           content: truncate(content, 1200),
           author: item.creator ? normalizeText(item.creator) : subreddit,
           publishedAt: item.isoDate || item.pubDate || null,
           metadata: {
             subreddit,
-            fallback: "rss"
+            fallback: "rss",
+            evidenceFamily: "community",
+            canonicalUrl: normalizeCanonicalUrl(item.link || `https://www.reddit.com/r/${subreddit}/new/`),
+            canonicalDomain: domainFromUrl(item.link || `https://www.reddit.com/r/${subreddit}/new/`),
+            qualitySignals: {
+              score: 60
+            }
           }
         });
       }
@@ -84,13 +90,19 @@ export const redditAdapter: SourceAdapter = {
       sourceKind: context.source.kind,
       externalId: child.data.id,
       title: normalizeText(child.data.title),
-      url: `https://www.reddit.com${child.data.permalink}`,
+      url: normalizeCanonicalUrl(`https://www.reddit.com${child.data.permalink}`),
       snippet: truncate(normalizeText(child.data.selftext || child.data.title), 220),
       content: truncate(normalizeText(child.data.selftext || child.data.title), 1200),
       author: normalizeText(child.data.author),
       publishedAt: new Date(child.data.created_utc * 1000).toISOString(),
       metadata: {
-        subreddit: child.data.subreddit
+        subreddit: child.data.subreddit,
+        evidenceFamily: "community",
+        canonicalUrl: normalizeCanonicalUrl(`https://www.reddit.com${child.data.permalink}`),
+        canonicalDomain: domainFromUrl(`https://www.reddit.com${child.data.permalink}`),
+        qualitySignals: {
+          score: 60
+        }
       }
     }));
   }

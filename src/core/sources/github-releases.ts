@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import type { CandidateDocument } from "@/core/contracts";
 import type { SourceAdapter, SourceFetchContext } from "@/core/sources/base";
-import { truncate } from "@/core/utils";
+import { domainFromUrl, normalizeCanonicalUrl, truncate } from "@/core/utils";
 
 const parser = new Parser();
 
@@ -20,13 +20,19 @@ export const githubReleasesAdapter: SourceAdapter = {
           sourceKind: context.source.kind,
           externalId: item.id || item.guid || `${repo}-${item.link}`,
           title: item.title || `${repo} release`,
-          url: item.link || `https://github.com/${repo}/releases`,
+          url: normalizeCanonicalUrl(item.link || `https://github.com/${repo}/releases`),
           snippet: truncate(item.contentSnippet || item.title || "", 220),
           content: truncate(item.content || item.contentSnippet || item.title || "", 1200),
           author: item.creator || repo,
           publishedAt: item.isoDate || item.pubDate || null,
           metadata: {
-            repository: repo
+            repository: repo,
+            evidenceFamily: "official",
+            canonicalUrl: normalizeCanonicalUrl(item.link || `https://github.com/${repo}/releases`),
+            canonicalDomain: domainFromUrl(item.link || `https://github.com/${repo}/releases`),
+            qualitySignals: {
+              score: 90
+            }
           }
         });
       }

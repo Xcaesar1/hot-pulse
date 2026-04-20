@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import type { CandidateDocument } from "@/core/contracts";
 import type { SourceAdapter, SourceFetchContext } from "@/core/sources/base";
-import { normalizeText, truncate } from "@/core/utils";
+import { domainFromUrl, normalizeCanonicalUrl, normalizeText, truncate } from "@/core/utils";
 
 const parser = new Parser();
 
@@ -25,14 +25,20 @@ export const customRssAdapter: SourceAdapter = {
             sourceKind: context.source.kind,
             externalId: item.id || item.guid || `${feedUrl}-${item.link}`,
             title: normalizeText(item.title || feed.title || "Custom RSS item"),
-            url: item.link || feed.link || feedUrl,
+            url: normalizeCanonicalUrl(item.link || feed.link || feedUrl),
             snippet: truncate(normalizeText(item.contentSnippet || item.title || ""), 220),
             content: truncate(normalizeText(item.content || item.contentSnippet || item.title || ""), 1200),
             author: item.creator ? normalizeText(item.creator) : feed.title ? normalizeText(feed.title) : null,
             publishedAt: item.isoDate || item.pubDate || null,
             metadata: {
               feedTitle: feed.title,
-              feedUrl
+              feedUrl,
+              evidenceFamily: "official",
+              canonicalUrl: normalizeCanonicalUrl(item.link || feed.link || feedUrl),
+              canonicalDomain: domainFromUrl(item.link || feed.link || feedUrl),
+              qualitySignals: {
+                score: 84
+              }
             }
           });
         }

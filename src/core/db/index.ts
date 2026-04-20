@@ -198,6 +198,7 @@ export async function upsertHotspot(payload: {
   noveltyScore: number;
   sourceDiversityScore: number;
   sourceAuthorityScore: number;
+  sourceReliabilityScore: number;
   velocityScore: number;
   finalScore: number;
   monitorLabels: string[];
@@ -220,6 +221,7 @@ export async function upsertHotspot(payload: {
         noveltyScore: payload.noveltyScore,
         sourceDiversityScore: payload.sourceDiversityScore,
         sourceAuthorityScore: payload.sourceAuthorityScore,
+        sourceReliabilityScore: payload.sourceReliabilityScore,
         velocityScore: payload.velocityScore,
         finalScore: payload.finalScore,
         evidenceCount: payload.evidenceCount,
@@ -244,6 +246,7 @@ export async function upsertHotspot(payload: {
     noveltyScore: payload.noveltyScore,
     sourceDiversityScore: payload.sourceDiversityScore,
     sourceAuthorityScore: payload.sourceAuthorityScore,
+    sourceReliabilityScore: payload.sourceReliabilityScore,
     velocityScore: payload.velocityScore,
     finalScore: payload.finalScore,
     evidenceCount: payload.evidenceCount,
@@ -271,12 +274,15 @@ export async function insertEvidence(hotspotId: string, candidateId: string, evi
       candidateId,
       sourceKey: evidence.sourceKey,
       sourceLabel: evidence.sourceLabel,
+      evidenceFamily: evidence.evidenceFamily,
+      discoverySource: evidence.discoverySource,
       url: evidence.url,
       title: evidence.title,
       snippet: evidence.snippet,
       author: evidence.author,
       publishedAt: evidence.publishedAt,
-      weight: evidence.weight
+      weight: evidence.weight,
+      qualityScore: evidence.qualityScore
     })
     .onConflictDoNothing();
 }
@@ -298,6 +304,7 @@ export async function listHotspots(): Promise<HotspotView[]> {
     noveltyScore: row.noveltyScore,
     sourceDiversityScore: row.sourceDiversityScore,
     sourceAuthorityScore: row.sourceAuthorityScore,
+    sourceReliabilityScore: row.sourceReliabilityScore,
     velocityScore: row.velocityScore,
     finalScore: row.finalScore,
     evidenceCount: row.evidenceCount,
@@ -310,12 +317,15 @@ export async function listHotspots(): Promise<HotspotView[]> {
       .map((item) => ({
         sourceKey: item.sourceKey,
         sourceLabel: normalizeText(item.sourceLabel),
+        evidenceFamily: item.evidenceFamily as HotspotEvidenceRecord["evidenceFamily"],
+        discoverySource: normalizeText(item.discoverySource),
         url: item.url,
         title: normalizeText(item.title),
         snippet: normalizeText(item.snippet),
         author: item.author ? normalizeText(item.author) : null,
         publishedAt: item.publishedAt,
-        weight: item.weight
+        weight: item.weight,
+        qualityScore: item.qualityScore
       }))
   }));
 }

@@ -59,6 +59,37 @@ export function domainFromUrl(rawUrl: string): string {
   }
 }
 
+export function normalizeCanonicalUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    const blockedParams = new Set([
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "oc",
+      "ref",
+      "ref_src",
+      "fbclid",
+      "gclid",
+      "guccounter",
+      "guce_referrer",
+      "guce_referrer_sig"
+    ]);
+    for (const key of [...url.searchParams.keys()]) {
+      if (blockedParams.has(key.toLowerCase())) {
+        url.searchParams.delete(key);
+      }
+    }
+    url.hash = "";
+    const serialized = `${url.origin}${url.pathname}${url.search ? `?${url.searchParams.toString()}` : ""}`;
+    return serialized.replace(/\/$/, "");
+  } catch {
+    return rawUrl;
+  }
+}
+
 export function looksLikeUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }

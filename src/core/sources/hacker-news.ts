@@ -1,6 +1,6 @@
 import type { CandidateDocument } from "@/core/contracts";
 import type { SourceAdapter, SourceFetchContext } from "@/core/sources/base";
-import { normalizeText, truncate } from "@/core/utils";
+import { domainFromUrl, normalizeCanonicalUrl, normalizeText, truncate } from "@/core/utils";
 
 interface HnItem {
   objectID: string;
@@ -27,13 +27,19 @@ export const hackerNewsAdapter: SourceAdapter = {
       sourceKind: context.source.kind,
       externalId: item.objectID,
       title: normalizeText(item.title),
-      url: item.url || `https://news.ycombinator.com/item?id=${item.objectID}`,
+      url: normalizeCanonicalUrl(item.url || `https://news.ycombinator.com/item?id=${item.objectID}`),
       snippet: truncate(normalizeText(item.story_text || item.title), 220),
       content: truncate(normalizeText(item.story_text || item.title), 1200),
       author: normalizeText(item.author),
       publishedAt: item.created_at,
       metadata: {
-        query: context.monitor.query
+        query: context.monitor.query,
+        evidenceFamily: "community",
+        canonicalUrl: normalizeCanonicalUrl(item.url || `https://news.ycombinator.com/item?id=${item.objectID}`),
+        canonicalDomain: domainFromUrl(item.url || `https://news.ycombinator.com/item?id=${item.objectID}`),
+        qualitySignals: {
+          score: 74
+        }
       }
     }));
   }
