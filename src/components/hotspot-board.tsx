@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   CalendarClock,
   ChevronDown,
@@ -26,6 +28,8 @@ import type {
 } from "@/core/contracts";
 import { buildHotspotQueryString, getDefaultHotspotListQuery, normalizeHotspotListQuery } from "@/core/hotspot-query";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 8;
 
 const levelBadgeStyles: Record<NotificationLevel, string> = {
   high: "border-amber-300 bg-amber-100 text-amber-500",
@@ -69,7 +73,6 @@ export function HotspotBoard({
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
-  const [expandedHotspotId, setExpandedHotspotId] = useState<string | null>(hotspots[0]?.id ?? null);
 
   const sourceOptions = useMemo(
     () =>
@@ -92,6 +95,14 @@ export function HotspotBoard({
     [sourceOptions]
   );
 
+  const totalPages = Math.max(1, Math.ceil(hotspots.length / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(query.page, 1), totalPages);
+  const pagedHotspots = hotspots.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const [expandedHotspotId, setExpandedHotspotId] = useState<string | null>(null);
+  const resolvedExpandedHotspotId =
+    expandedHotspotId && pagedHotspots.some((item) => item.id === expandedHotspotId) ? expandedHotspotId : pagedHotspots[0]?.id ?? null;
+
   const activeTags = useMemo(() => {
     const defaults = getDefaultHotspotListQuery("dashboard");
     const tags: string[] = [];
@@ -101,14 +112,21 @@ export function HotspotBoard({
       tags.push(`重要性 ${query.levels.map((level) => level.toUpperCase()).join(" / ")}`);
     }
     if (query.sources.length > 0) tags.push(...query.sources.map((item) => sourceLabelMap.get(item) ?? item));
-    if (query.monitors.length > 0) tags.push(...query.monitors.map((item) => item));
+    if (query.monitors.length > 0) tags.push(...query.monitors);
     if (query.sort !== defaults.sort) tags.push(sortLabels[query.sort]);
 
     return tags;
   }, [query, sourceLabelMap]);
 
-  function replaceQuery(patch: Partial<HotspotListQuery>) {
-    const nextQuery = normalizeHotspotListQuery({ ...query, ...patch }, "dashboard");
+  function replaceQuery(patch: Partial<HotspotListQuery>, options?: { preservePage?: boolean }) {
+    const nextQuery = normalizeHotspotListQuery(
+      {
+        ...query,
+        ...patch,
+        page: options?.preservePage ? patch.page ?? query.page : patch.page ?? 1
+      },
+      "dashboard"
+    );
     const search = buildHotspotQueryString(nextQuery, "dashboard");
 
     startTransition(() => {
@@ -125,7 +143,6 @@ export function HotspotBoard({
   }
 
   function resetFilters() {
-    setExpandedHotspotId(hotspots[0]?.id ?? null);
     startTransition(() => {
       router.replace(pathname as Route);
     });
@@ -143,7 +160,7 @@ export function HotspotBoard({
             <div className="space-y-1">
               <h2 className="font-display text-3xl tracking-[-0.05em] text-ink-950 md:text-[2.5rem]">先扫读，再判断，再开写</h2>
               <p className="max-w-3xl text-sm leading-7 text-stone-600">
-                默认聚焦最近 24 小时内值得优先处理的内容。你可以像编辑台一样快速切换排序、来源和关键词，把视图压缩到最适合你当前发稿节奏的一层。
+                默认聚焦最近 24 小时内值得优先处理的内容。排序、筛选和分页都围绕“快速判断是否值得发”来组织，不让信息把你淹没。
               </p>
             </div>
           </div>
@@ -200,37 +217,22 @@ export function HotspotBoard({
               {sourceOptions.map((source) => {
                 const active = query.sources.includes(source.value);
                 return (
-                  <ToggleRow
-                    key={source.value}
-                    active={active}
-                    label={source.label}
-                    onClick={() => toggleValue("sources", source.value)}
-                  />
+                  <ToggleRow key={source.value} active={active} label={source.label} onClick={() => toggleValue("sources", source.value)} />
                 );
               })}
             </SelectionMenu>
 
             <SelectionMenu
               label="重要性"
-              summary={query.levels.length === 3 ? "High / Medium" : query.levels.map((level) => level.toUpperCase()).join(" / ")}
+              summary={query.levels.length === 3 ? "全部等级" : query.levels.map((level) => level.toUpperCase()).join(" / ")}
             >
               {(["high", "medium", "low"] as NotificationLevel[]).map((level) => {
                 const active = query.levels.includes(level);
-                return (
-                  <ToggleRow
-                    key={level}
-                    active={active}
-                    label={level.toUpperCase()}
-                    onClick={() => toggleValue("levels", level)}
-                  />
-                );
+                return <ToggleRow key={level} active={active} label={level.toUpperCase()} onClick={() => toggleValue("levels", level)} />;
               })}
             </SelectionMenu>
 
-            <SelectionMenu
-              label="关键词"
-              summary={query.monitors.length === 0 ? "全部关键词" : `${query.monitors.length} 个已选`}
-            >
+            <SelectionMenu label="关键词" summary={query.monitors.length === 0 ? "全部关键词" : `${query.monitors.length} 个已选`}>
               {monitorOptions.map((label) => {
                 const active = query.monitors.includes(label);
                 return <ToggleRow key={label} active={active} label={label} onClick={() => toggleValue("monitors", label)} />;
@@ -277,14 +279,27 @@ export function HotspotBoard({
             </p>
           </div>
         ) : (
-          hotspots.map((hotspot) => (
-            <HotspotCard
-              key={hotspot.id}
-              expanded={expandedHotspotId === hotspot.id}
-              hotspot={hotspot}
-              onToggle={() => setExpandedHotspotId((current) => (current === hotspot.id ? null : hotspot.id))}
+          <>
+            <div className="grid gap-4 2xl:grid-cols-2">
+              {pagedHotspots.map((hotspot) => (
+                <HotspotCard
+                  key={hotspot.id}
+                  expanded={resolvedExpandedHotspotId === hotspot.id}
+                  hotspot={hotspot}
+                  onToggle={() => setExpandedHotspotId((current) => (current === hotspot.id ? null : hotspot.id))}
+                />
+              ))}
+            </div>
+
+            <PaginationBar
+              currentPage={currentPage}
+              end={Math.min(currentPage * PAGE_SIZE, hotspots.length)}
+              start={hotspots.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}
+              total={hotspots.length}
+              totalPages={totalPages}
+              onChange={(page) => replaceQuery({ page }, { preservePage: true })}
             />
-          ))
+          </>
         )}
       </div>
     </section>
@@ -318,10 +333,8 @@ function HotspotCard({
             </div>
 
             <div className="space-y-3">
-              <h3 className="max-w-5xl text-balance font-display text-[1.95rem] leading-tight tracking-[-0.04em] text-ink-950 md:text-[2.25rem]">
-                {hotspot.title}
-              </h3>
-              <p className="max-w-4xl text-base leading-8 text-stone-600">{hotspot.summary}</p>
+              <h3 className="text-balance font-display text-[1.8rem] leading-tight tracking-[-0.04em] text-ink-950 md:text-[2rem]">{hotspot.title}</h3>
+              <p className="text-base leading-8 text-stone-600">{hotspot.summary}</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-4 text-sm text-stone-500">
@@ -329,9 +342,7 @@ function HotspotCard({
               <MetricPill icon={Sparkles} label={`热度 ${hotspot.heatScore}`} />
               <MetricPill
                 icon={CalendarClock}
-                label={`${hotspot.latestPublishedAt ? "发布时间" : "发现时间"} ${formatDateTime(
-                  hotspot.latestPublishedAt ?? hotspot.firstSeenAt
-                )}`}
+                label={`${hotspot.latestPublishedAt ? "发布时间" : "发现时间"} ${formatDateTime(hotspot.latestPublishedAt ?? hotspot.firstSeenAt)}`}
               />
             </div>
           </div>
@@ -382,9 +393,7 @@ function HotspotDetailPanel({ hotspot }: { hotspot: HotspotView }) {
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">多源证据</p>
               <p className="mt-1 text-sm text-stone-600">先看来源结构，再决定这条热点要不要立刻做成内容。</p>
             </div>
-            <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs text-stone-600">
-              {hotspot.evidenceCount} 条证据
-            </span>
+            <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs text-stone-600">{hotspot.evidenceCount} 条证据</span>
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -487,6 +496,75 @@ function ToggleRow({
   );
 }
 
+function PaginationBar({
+  currentPage,
+  totalPages,
+  total,
+  start,
+  end,
+  onChange
+}: {
+  currentPage: number;
+  totalPages: number;
+  total: number;
+  start: number;
+  end: number;
+  onChange: (page: number) => void;
+}) {
+  const pages = buildPageList(currentPage, totalPages);
+
+  return (
+    <div className="flex flex-col gap-4 rounded-[28px] border border-stone-200 bg-white/90 p-4 shadow-[0_24px_70px_rgba(35,31,27,0.08)] md:flex-row md:items-center md:justify-between">
+      <div className="text-sm text-stone-600">
+        显示第 <span className="font-semibold text-ink-950">{start}</span> - <span className="font-semibold text-ink-950">{end}</span> 条，共{" "}
+        <span className="font-semibold text-ink-950">{total}</span> 条
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={currentPage <= 1}
+          onClick={() => onChange(currentPage - 1)}
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          上一页
+        </button>
+
+        {pages.map((page, index) =>
+          page === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="px-2 text-stone-400">
+              ...
+            </span>
+          ) : (
+            <button
+              key={page}
+              type="button"
+              onClick={() => onChange(page)}
+              className={cn(
+                "inline-flex h-10 min-w-10 items-center justify-center rounded-full border px-3 text-sm transition",
+                currentPage === page ? "border-blue-200 bg-blue-50 text-blue-700" : "border-stone-200 bg-white text-stone-600 hover:bg-paper-50"
+              )}
+            >
+              {page}
+            </button>
+          )
+        )}
+
+        <button
+          type="button"
+          disabled={currentPage >= totalPages}
+          onClick={() => onChange(currentPage + 1)}
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          下一页
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MetaTag({ children }: { children: React.ReactNode }) {
   return <span className="rounded-full border border-stone-200 bg-paper-50 px-3 py-1 text-xs text-stone-600">{children}</span>;
 }
@@ -527,6 +605,29 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function summarizeOptions(values: string[], labelMap: Map<string, string>) {
   if (values.length === 1) return labelMap.get(values[0]) ?? values[0];
   return `已选 ${values.length} 项`;
+}
+
+function buildPageList(currentPage: number, totalPages: number) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages: Array<number | "ellipsis"> = [1];
+
+  if (currentPage > 3) pages.push("ellipsis");
+
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+
+  if (currentPage < totalPages - 2) pages.push("ellipsis");
+
+  pages.push(totalPages);
+
+  return pages;
 }
 
 function formatEvidenceFamily(family: HotspotView["evidence"][number]["evidenceFamily"]) {

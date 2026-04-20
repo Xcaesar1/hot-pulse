@@ -69,6 +69,12 @@ describe("hotspot-query", () => {
     expect(parseHotspotListQuery(new URLSearchParams())).toEqual(getDefaultHotspotListQuery());
   });
 
+  it("parses page and clamps invalid values", () => {
+    expect(parseHotspotListQuery(new URLSearchParams({ page: "3" })).page).toBe(3);
+    expect(parseHotspotListQuery(new URLSearchParams({ page: "0" })).page).toBe(1);
+    expect(parseHotspotListQuery(new URLSearchParams({ page: "-4" })).page).toBe(1);
+  });
+
   it("filters by source, level, monitor, and time range", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T12:00:00.000Z"));
@@ -287,5 +293,6 @@ describe("hotspot-query", () => {
     expect(result.sort).toBe("importance");
     expect(result.timeRange).toBe("24h");
     expect(result.levels).toEqual(["high"]);
+    expect(result.page).toBe(1);
   });
 });

@@ -126,8 +126,16 @@ export function DashboardShell({
                   Hot Pulse
                 </span>
                 <StatusChip active icon={Clock3} label="每 30 分钟自动扫描" />
-                <StatusChip active={initialData.env.hasOpenRouter} icon={Bot} label={initialData.env.hasOpenRouter ? "OpenRouter 已就绪" : "OpenRouter 待配置"} />
-                <StatusChip active={initialData.env.hasEmail} icon={Mail} label={initialData.env.hasEmail ? "邮件通知可用" : "邮件通知待配置"} />
+                <StatusChip
+                  active={initialData.env.hasOpenRouter}
+                  icon={Bot}
+                  label={initialData.env.hasOpenRouter ? "OpenRouter 已就绪" : "OpenRouter 待配置"}
+                />
+                <StatusChip
+                  active={initialData.env.hasEmail}
+                  icon={Mail}
+                  label={initialData.env.hasEmail ? "邮件通知可用" : "邮件通知待配置"}
+                />
               </div>
 
               <div className="space-y-3">
@@ -135,7 +143,7 @@ export function DashboardShell({
                   你的 AI 内容编辑台
                 </h1>
                 <p className="max-w-3xl text-sm leading-7 text-stone-600 md:text-base">
-                  这里不是一个会分散注意力的后台，而是一张专门给你判断选题的首页。首屏只保留最值得立刻处理的热点，其余规则、通知和来源配置都收进次级面板，让你先看见内容，再做动作。
+                  首屏只保留你真正需要先看的热点信息。规则、通知和来源配置都收进侧边栏，让你先判断内容值不值得写，再决定下一步动作。
                 </p>
               </div>
             </div>
@@ -150,14 +158,14 @@ export function DashboardShell({
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="高优先级热点" value={String(metrics.highCount)} hint="适合优先判断是否做成内容" />
             <MetricCard
               label="来源健康"
               value={`${metrics.healthySources}/${initialData.sources.length}`}
               hint="当前可用的信息来源数量"
             />
-            <MetricCard label="监控规则" value={String(metrics.totalMonitors)} hint="你正在持续跟踪的关键词与主题" />
+            <MetricCard label="监控规则" value={String(metrics.totalMonitors)} hint="你正在持续追踪的关键词与主题" />
             <MetricCard
               label="编辑建议"
               value={metrics.breaking ? "有" : "无"}
@@ -166,15 +174,11 @@ export function DashboardShell({
           </div>
         </header>
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_23rem]">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.52fr)_24rem]">
           <HotspotBoard hotspots={initialData.hotspots} monitors={initialData.monitors} query={hotspotQuery} sources={initialData.sources} />
 
-          <aside className="grid h-fit gap-4 xl:sticky xl:top-5">
-            <SidebarCard
-              title="编辑简报"
-              subtitle="把系统状态压缩成几个你真正会看的信号"
-              icon={Waves}
-            >
+          <aside className="grid h-fit gap-4">
+            <SidebarCard title="编辑简报" subtitle="把系统状态压缩成几个你真正会看的信号" icon={Waves}>
               <div className="grid gap-3">
                 <ReadinessRow label="OpenRouter" value={initialData.env.hasOpenRouter ? "已连接" : "待配置"} active={initialData.env.hasOpenRouter} />
                 <ReadinessRow label="twitterapi.io" value={initialData.env.hasTwitterApi ? "已连接" : "待配置"} active={initialData.env.hasTwitterApi} />
@@ -231,7 +235,7 @@ export function DashboardShell({
               </div>
             </SidebarCard>
 
-            <SidebarCard title="通知收件箱" subtitle="高优先级提醒先落在这里" icon={Bell}>
+            <SidebarCard title="通知收件箱" subtitle="高优先级提醒会先落在这里" icon={Bell}>
               <div className="grid gap-3">
                 {initialData.notifications.length === 0 ? (
                   <EmptySidebar text="还没有通知记录。满足条件的热点会先进入这里，方便你稍后统一处理。" />
@@ -254,7 +258,7 @@ export function DashboardShell({
               </div>
             </SidebarCard>
 
-            <SidebarCard title="最近运行" subtitle="只看最近几次扫描有没有异常" icon={Activity}>
+            <SidebarCard title="最近运行" subtitle="快速确认最近几次扫描是否正常" icon={Activity}>
               <div className="grid gap-3">
                 {initialData.recentRuns.length === 0 ? (
                   <EmptySidebar text="这里会显示最近扫描的结果和异常信息，方便你快速确认链路是否正常。" />
@@ -296,19 +300,17 @@ export function DashboardShell({
 
                     <div className="mt-4 grid gap-3">
                       {source.errorMessage ? <p className="text-sm text-red-600">{source.errorMessage}</p> : null}
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          className={cn(
-                            "rounded-full px-3 py-2 text-xs font-semibold transition",
-                            source.enabled
-                              ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                              : "border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
-                          )}
-                          onClick={() => runMutation(() => toggleSource(source))}
-                        >
-                          {source.enabled ? "停用来源" : "启用来源"}
-                        </button>
-                      </div>
+                      <button
+                        className={cn(
+                          "w-fit rounded-full px-3 py-2 text-xs font-semibold transition",
+                          source.enabled
+                            ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                            : "border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                        )}
+                        onClick={() => runMutation(() => toggleSource(source))}
+                      >
+                        {source.enabled ? "停用来源" : "启用来源"}
+                      </button>
 
                       <textarea
                         className="min-h-36 rounded-[18px] border border-stone-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-ink-950 outline-none transition focus:border-blue-300"
@@ -469,11 +471,7 @@ function InputField({
 }
 
 function EmptySidebar({ text }: { text: string }) {
-  return (
-    <div className="rounded-[22px] border border-dashed border-stone-300 bg-paper-50 p-4 text-sm leading-7 text-stone-500">
-      {text}
-    </div>
-  );
+  return <div className="rounded-[22px] border border-dashed border-stone-300 bg-paper-50 p-4 text-sm leading-7 text-stone-500">{text}</div>;
 }
 
 function formatDateTime(input: string | null) {

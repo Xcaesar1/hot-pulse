@@ -112,6 +112,7 @@ export interface HotspotListQuery {
   levels: NotificationLevel[];
   monitors: string[];
   timeRange: HotspotTimeRange;
+  page: number;
 }
 
 export interface NotificationView {

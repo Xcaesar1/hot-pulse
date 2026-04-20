@@ -23,6 +23,11 @@ function clamp(value: number, min = 0, max = 100) {
   return Math.max(min, Math.min(max, value));
 }
 
+function clampPage(value: number) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.floor(value));
+}
+
 function isSort(value: string): value is HotspotSort {
   return sortValues.includes(value as HotspotSort);
 }
@@ -69,7 +74,8 @@ export function getDefaultHotspotListQuery(mode: QueryMode = "dashboard"): Hotsp
       sources: [],
       levels: [],
       monitors: [],
-      timeRange: "all"
+      timeRange: "all",
+      page: 1
     };
   }
 
@@ -78,7 +84,8 @@ export function getDefaultHotspotListQuery(mode: QueryMode = "dashboard"): Hotsp
     sources: [],
     levels: ["high", "medium"],
     monitors: [],
-    timeRange: "24h"
+    timeRange: "24h",
+    page: 1
   };
 }
 
@@ -93,13 +100,15 @@ export function normalizeHotspotListQuery(input: Partial<HotspotListQuery> = {},
     sources: [...new Set((input.sources ?? []).map((value) => value.trim()).filter(Boolean))],
     levels: normalizedLevels,
     monitors: [...new Set((input.monitors ?? []).map((value) => value.trim()).filter(Boolean))],
-    timeRange: input.timeRange && isTimeRange(input.timeRange) ? input.timeRange : defaults.timeRange
+    timeRange: input.timeRange && isTimeRange(input.timeRange) ? input.timeRange : defaults.timeRange,
+    page: clampPage(input.page ?? defaults.page)
   };
 }
 
 export function parseHotspotListQuery(input: SearchParamsLike, mode: QueryMode = "dashboard"): HotspotListQuery {
   const sort = splitCsv(readValues(input, "sort"))[0];
   const timeRange = splitCsv(readValues(input, "timeRange"))[0];
+  const page = splitCsv(readValues(input, "page"))[0];
   const parsedLevels = splitCsv(readValues(input, "levels")).filter(isLevel);
 
   return normalizeHotspotListQuery(
@@ -108,7 +117,8 @@ export function parseHotspotListQuery(input: SearchParamsLike, mode: QueryMode =
       sources: splitCsv(readValues(input, "sources")),
       levels: parsedLevels.length > 0 ? parsedLevels : undefined,
       monitors: splitCsv(readValues(input, "monitors")),
-      timeRange: timeRange && isTimeRange(timeRange) ? timeRange : undefined
+      timeRange: timeRange && isTimeRange(timeRange) ? timeRange : undefined,
+      page: page ? Number(page) : undefined
     },
     mode
   );
@@ -124,6 +134,7 @@ export function buildHotspotQueryString(input: Partial<HotspotListQuery>, mode: 
   if (query.sources.length > 0) params.set("sources", query.sources.join(","));
   if (query.monitors.length > 0) params.set("monitors", query.monitors.join(","));
   if (query.levels.join(",") !== defaults.levels.join(",")) params.set("levels", query.levels.join(","));
+  if (query.page !== defaults.page) params.set("page", String(query.page));
 
   return params.toString();
 }
