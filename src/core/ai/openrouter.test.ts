@@ -11,12 +11,14 @@ describe("openrouter analysis helpers", () => {
         "noveltyScore": 68,
         "summary": "New model release confirmed.",
         "reasoning": "Appears in multiple official sources.",
+        "credibilityReasoning": "Official sources align and no contradiction appears in the payload.",
         "suggestedNotify": "high"
       }
     `);
 
     expect(result.relevanceScore).toBe(82);
     expect(result.suggestedNotify).toBe("high");
+    expect(result.credibilityReasoning).toContain("Official sources");
   });
 
   it("falls back to heuristic analysis when no model output exists", () => {
@@ -28,6 +30,7 @@ describe("openrouter analysis helpers", () => {
 
     expect(result.isRelevant).toBe(true);
     expect(result.relevanceScore).toBeGreaterThan(50);
+    expect(result.credibilityReasoning.length).toBeGreaterThan(0);
   });
 
   it("keeps fallback scoring shape stable", () => {

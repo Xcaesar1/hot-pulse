@@ -22,6 +22,7 @@ export function parseAnalysisPayload(raw: string): AIAnalysisResult {
     noveltyScore: clamp(Number(parsed.noveltyScore ?? 0)),
     summary: truncate(String(parsed.summary ?? "No summary produced."), 320),
     reasoning: truncate(String(parsed.reasoning ?? "No reasoning provided."), 260),
+    credibilityReasoning: truncate(String(parsed.credibilityReasoning ?? "No credibility reasoning provided."), 260),
     suggestedNotify: (parsed.suggestedNotify as NotificationLevel) ?? "low"
   };
 }
@@ -43,6 +44,10 @@ export function heuristicAnalysis(input: { query: string; title: string; body: s
     noveltyScore,
     summary: truncate(input.body || input.title, 220),
     reasoning: `Heuristic fallback matched ${hits}/${keywords.length || 1} query terms.`,
+    credibilityReasoning:
+      credibilityRisk >= 50
+        ? "Heuristic fallback detected rumor-like or unconfirmed language and reduced trust."
+        : "Heuristic fallback found no strong rumor markers in the available text.",
     suggestedNotify: heuristicNotifyLevel(relevanceScore, credibilityRisk)
   };
 }
@@ -54,7 +59,8 @@ function heuristicWithReason(
   const fallback = heuristicAnalysis(input);
   return {
     ...fallback,
-    reasoning: truncate(`Fallback analysis used because OpenRouter was unavailable: ${reason}`, 260)
+    reasoning: truncate(`Fallback analysis used because OpenRouter was unavailable: ${reason}`, 260),
+    credibilityReasoning: truncate(`Credibility analysis also fell back because OpenRouter was unavailable: ${reason}`, 260)
   };
 }
 
@@ -89,6 +95,7 @@ Required JSON shape:
   "noveltyScore": number,
   "summary": string,
   "reasoning": string,
+  "credibilityReasoning": string,
   "suggestedNotify": "high" | "medium" | "low"
 }
 

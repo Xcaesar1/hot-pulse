@@ -12,6 +12,7 @@ describe("computeScores", () => {
         noveltyScore: 72,
         summary: "Summary",
         reasoning: "Reason",
+        credibilityReasoning: "Credibility reason",
         suggestedNotify: "high"
       },
       evidence: [
@@ -25,10 +26,13 @@ describe("computeScores", () => {
           snippet: "Snippet",
           author: "alice",
           publishedAt: now,
+          capturedAt: now,
           freshnessState: "fresh",
           isFreshEvidence: true,
           weight: 1,
-          qualityScore: 78
+          qualityScore: 78,
+          interactionMetrics: null,
+          authorSignals: null
         },
         {
           sourceKey: "github-releases",
@@ -40,10 +44,13 @@ describe("computeScores", () => {
           snippet: "Snippet",
           author: "bob",
           publishedAt: now,
+          capturedAt: now,
           freshnessState: "fresh",
           isFreshEvidence: true,
           weight: 1,
-          qualityScore: 92
+          qualityScore: 92,
+          interactionMetrics: null,
+          authorSignals: null
         }
       ]
     });
@@ -63,6 +70,7 @@ describe("computeScores", () => {
         noveltyScore: 80,
         summary: "Summary",
         reasoning: "Reason",
+        credibilityReasoning: "Credibility reason",
         suggestedNotify: "high"
       },
       evidence: [
@@ -76,10 +84,13 @@ describe("computeScores", () => {
           snippet: "Snippet",
           author: "alice",
           publishedAt: now,
+          capturedAt: now,
           freshnessState: "fresh",
           isFreshEvidence: true,
           weight: 1,
-          qualityScore: 80
+          qualityScore: 80,
+          interactionMetrics: null,
+          authorSignals: null
         }
       ]
     });
@@ -97,6 +108,7 @@ describe("computeScores", () => {
         noveltyScore: 70,
         summary: "Summary",
         reasoning: "Reason",
+        credibilityReasoning: "Credibility reason",
         suggestedNotify: "high"
       },
       evidence: [
@@ -110,10 +122,13 @@ describe("computeScores", () => {
           snippet: "Snippet",
           author: "openai",
           publishedAt: now,
+          capturedAt: now,
           freshnessState: "fresh",
           isFreshEvidence: true,
           weight: 1,
-          qualityScore: 72
+          qualityScore: 72,
+          interactionMetrics: null,
+          authorSignals: null
         },
         {
           sourceKey: "bing-search",
@@ -125,10 +140,13 @@ describe("computeScores", () => {
           snippet: "Snippet",
           author: "openai",
           publishedAt: now,
+          capturedAt: now,
           freshnessState: "fresh",
           isFreshEvidence: true,
           weight: 1,
-          qualityScore: 68
+          qualityScore: 68,
+          interactionMetrics: null,
+          authorSignals: null
         }
       ]
     });
@@ -147,6 +165,7 @@ describe("computeScores", () => {
         noveltyScore: 70,
         summary: "Summary",
         reasoning: "Reason",
+        credibilityReasoning: "Credibility reason",
         suggestedNotify: "high"
       },
       evidence: [
@@ -160,10 +179,13 @@ describe("computeScores", () => {
           snippet: "Snippet",
           author: "alice",
           publishedAt: stale,
+          capturedAt: stale,
           freshnessState: "stale",
           isFreshEvidence: false,
           weight: 1,
-          qualityScore: 81
+          qualityScore: 81,
+          interactionMetrics: null,
+          authorSignals: null
         },
         {
           sourceKey: "google-news-rss",
@@ -175,10 +197,13 @@ describe("computeScores", () => {
           snippet: "Snippet",
           author: "openai",
           publishedAt: stale,
+          capturedAt: stale,
           freshnessState: "stale",
           isFreshEvidence: false,
           weight: 1,
-          qualityScore: 76
+          qualityScore: 76,
+          interactionMetrics: null,
+          authorSignals: null
         }
       ]
     });

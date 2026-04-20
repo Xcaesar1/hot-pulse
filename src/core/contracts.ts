@@ -59,7 +59,26 @@ export interface AIAnalysisResult {
   noveltyScore: number;
   summary: string;
   reasoning: string;
+  credibilityReasoning: string;
   suggestedNotify: NotificationLevel;
+}
+
+export interface InteractionMetrics {
+  likes?: number;
+  reposts?: number;
+  replies?: number;
+  quotes?: number;
+  views?: number;
+  comments?: number;
+  upvotes?: number;
+  score?: number;
+}
+
+export interface AuthorSignals {
+  trustedAccount?: boolean;
+  isBlueVerified?: boolean;
+  verifiedType?: string | null;
+  followers?: number;
 }
 
 export interface HotspotEvidenceRecord {
@@ -72,10 +91,13 @@ export interface HotspotEvidenceRecord {
   snippet: string;
   author: string | null;
   publishedAt: string | null;
+  capturedAt: string | null;
   freshnessState: FreshnessState;
   isFreshEvidence: boolean;
   weight: number;
   qualityScore: number;
+  interactionMetrics: InteractionMetrics | null;
+  authorSignals: AuthorSignals | null;
 }
 
 export interface HotspotView {
@@ -84,6 +106,9 @@ export interface HotspotView {
   title: string;
   canonicalUrl: string;
   summary: string;
+  rawSnippet: string | null;
+  reasoning: string | null;
+  credibilityReasoning: string | null;
   notifyLevel: NotificationLevel;
   relevanceScore: number;
   credibilityRisk: number;

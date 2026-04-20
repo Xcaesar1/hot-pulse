@@ -1,10 +1,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import type {
+  AuthorSignals,
   DashboardData,
   FreshnessState,
   HotspotListQuery,
   HotspotEvidenceRecord,
   HotspotView,
+  InteractionMetrics,
   MonitorRecord,
   NotificationLevel,
   NotificationView,
@@ -56,6 +58,34 @@ function mapSource(row: typeof sources.$inferSelect): SourceRecord {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };
+}
+
+function parseInteractionMetrics(input: unknown): InteractionMetrics | null {
+  if (!input || typeof input !== "object") return null;
+  const metrics = input as Record<string, unknown>;
+  const normalized: InteractionMetrics = {};
+
+  for (const key of ["likes", "reposts", "replies", "quotes", "views", "comments", "upvotes", "score"] as const) {
+    const value = Number(metrics[key]);
+    if (Number.isFinite(value) && value > 0) {
+      normalized[key] = value;
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function parseAuthorSignals(input: unknown): AuthorSignals | null {
+  if (!input || typeof input !== "object") return null;
+  const author = input as Record<string, unknown>;
+  const normalized: AuthorSignals = {};
+
+  if (typeof author.trustedAccount === "boolean") normalized.trustedAccount = author.trustedAccount;
+  if (typeof author.isBlueVerified === "boolean") normalized.isBlueVerified = author.isBlueVerified;
+  if (typeof author.verifiedType === "string" || author.verifiedType === null) normalized.verifiedType = author.verifiedType as string | null;
+  if (Number.isFinite(Number(author.followers)) && Number(author.followers) > 0) normalized.followers = Number(author.followers);
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
 export async function listMonitors(): Promise<MonitorRecord[]> {
@@ -295,12 +325,16 @@ export async function listHotspots(query?: Partial<HotspotListQuery>, mode: "das
   const db = await ready();
   const hotspotRows = await db.select().from(hotspots).orderBy(desc(hotspots.lastSeenAt));
   const evidenceRows = await db.select().from(hotspotEvidences);
+  const candidateRows = await db.select().from(candidateDocuments);
+  const candidateMap = new Map(candidateRows.map((row) => [row.id, row]));
 
   const mappedRows = hotspotRows.map((row) => {
     const metadata = safeJsonParse<Record<string, unknown>>(row.metadata, {});
     const mappedEvidence = evidenceRows
       .filter((item) => item.hotspotId === row.id)
       .map((item) => {
+        const candidate = candidateMap.get(item.candidateId);
+        const candidateMetadata = safeJsonParse<Record<string, unknown>>(candidate?.metadata ?? "{}", {});
         const freshness = evaluateFreshness(item.publishedAt);
         return {
           sourceKey: item.sourceKey,
@@ -312,10 +346,13 @@ export async function listHotspots(query?: Partial<HotspotListQuery>, mode: "das
           snippet: normalizeText(item.snippet),
           author: item.author ? normalizeText(item.author) : null,
           publishedAt: item.publishedAt,
+          capturedAt: candidate?.createdAt ?? null,
           freshnessState: freshness.freshnessState as FreshnessState,
           isFreshEvidence: freshness.isFresh,
           weight: item.weight,
-          qualityScore: item.qualityScore
+          qualityScore: item.qualityScore,
+          interactionMetrics: parseInteractionMetrics(candidateMetadata.tweetMetrics ?? candidateMetadata.interactionMetrics),
+          authorSignals: parseAuthorSignals(candidateMetadata.authorSignals)
         };
       });
 
@@ -326,6 +363,9 @@ export async function listHotspots(query?: Partial<HotspotListQuery>, mode: "das
       title: normalizeText(row.title),
       canonicalUrl: row.canonicalUrl,
       summary: normalizeText(row.summary),
+      rawSnippet: metadata.rawSnippet ? normalizeText(String(metadata.rawSnippet)) : mappedEvidence.find((item) => item.snippet.trim().length > 0)?.snippet ?? null,
+      reasoning: metadata.reasoning ? normalizeText(String(metadata.reasoning)) : null,
+      credibilityReasoning: metadata.credibilityReasoning ? normalizeText(String(metadata.credibilityReasoning)) : null,
       notifyLevel: row.notifyLevel as NotificationLevel,
       relevanceScore: row.relevanceScore,
       credibilityRisk: row.credibilityRisk,

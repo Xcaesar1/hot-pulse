@@ -27,6 +27,8 @@ interface PendingHotspot {
   analyses: number[];
   risk: number[];
   novelty: number[];
+  reasonings: string[];
+  credibilityReasonings: string[];
   evidence: Map<string, HotspotEvidenceRecord>;
   monitorLabels: string[];
   suggestedNotify: Array<HotspotView["notifyLevel"]>;
@@ -111,10 +113,16 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
             snippet: document.snippet,
             author: document.author,
             publishedAt: document.publishedAt,
+            capturedAt: nowIso(),
             freshnessState: freshness.freshnessState,
             isFreshEvidence: freshness.isFresh,
             weight: 1,
-            qualityScore: getEvidenceQuality(document)
+            qualityScore: getEvidenceQuality(document),
+            interactionMetrics:
+              (document.metadata.tweetMetrics as HotspotEvidenceRecord["interactionMetrics"] | undefined) ??
+              (document.metadata.interactionMetrics as HotspotEvidenceRecord["interactionMetrics"] | undefined) ??
+              null,
+            authorSignals: (document.metadata.authorSignals as HotspotEvidenceRecord["authorSignals"] | undefined) ?? null
           };
 
           const pending = buckets.get(fingerprint) ?? {
@@ -124,6 +132,8 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
             analyses: [],
             risk: [],
             novelty: [],
+            reasonings: [],
+            credibilityReasonings: [],
             evidence: new Map<string, HotspotEvidenceRecord>(),
             monitorLabels: [],
             suggestedNotify: []
@@ -135,6 +145,8 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
           pending.analyses.push(analysis.relevanceScore);
           pending.risk.push(analysis.credibilityRisk);
           pending.novelty.push(analysis.noveltyScore);
+          pending.reasonings.push(analysis.reasoning);
+          pending.credibilityReasonings.push(analysis.credibilityReasoning);
           const evidenceIdentity = getEvidenceIdentity(evidence);
           const existingEvidence = pending.evidence.get(evidenceIdentity);
           if (!existingEvidence || evidence.qualityScore > existingEvidence.qualityScore) {
@@ -163,6 +175,9 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
               evidenceCount: pending.evidence.size,
               metadata: {
                 provisional: true,
+                rawSnippet: document.snippet,
+                reasoning: analysis.reasoning,
+                credibilityReasoning: analysis.credibilityReasoning,
                 freshnessScore: freshness.isFresh ? 100 : freshness.freshnessState === "unknown" ? 36 : 18,
                 hasFreshPrimaryEvidence: document.sourceKey === "twitter-api" && freshness.isFresh,
                 candidateState: freshness.isFresh ? "fresh_hotspot_candidate" : "stale_or_unknown_date_candidate",
@@ -186,7 +201,9 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
           credibilityRisk: avg(pending.risk),
           noveltyScore: avg(pending.novelty),
           summary: pending.summary,
-          reasoning: "Merged multi-source evidence",
+          reasoning: pending.reasonings.sort((left, right) => right.length - left.length)[0] ?? "Merged multi-source evidence",
+          credibilityReasoning:
+            pending.credibilityReasonings.sort((left, right) => right.length - left.length)[0] ?? "Merged multi-source credibility evidence",
           suggestedNotify: pending.suggestedNotify.includes("high") ? "high" : pending.suggestedNotify.includes("medium") ? "medium" : "low"
         },
         evidence: evidenceList
@@ -211,6 +228,9 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
         metadata: {
           evidenceSources: [...new Set(evidenceList.map((item) => item.sourceKey))],
           evidenceFamilies: [...new Set(evidenceList.map((item) => item.evidenceFamily))],
+          rawSnippet: evidenceList.find((item) => item.snippet.trim().length > 0)?.snippet ?? null,
+          reasoning: pending.reasonings.sort((left, right) => right.length - left.length)[0] ?? null,
+          credibilityReasoning: pending.credibilityReasonings.sort((left, right) => right.length - left.length)[0] ?? null,
           freshnessScore: scores.freshnessScore,
           hasFreshPrimaryEvidence: scores.hasFreshPrimaryEvidence,
           candidateState: scores.candidateState,

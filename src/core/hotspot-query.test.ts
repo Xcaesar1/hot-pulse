@@ -9,6 +9,9 @@ function makeHotspot(overrides: Partial<HotspotView> = {}): HotspotView {
     title: overrides.title ?? "Hotspot",
     canonicalUrl: overrides.canonicalUrl ?? "https://example.com/post",
     summary: overrides.summary ?? "Summary",
+    rawSnippet: overrides.rawSnippet ?? "Original source snippet",
+    reasoning: overrides.reasoning ?? "AI relevance reason",
+    credibilityReasoning: overrides.credibilityReasoning ?? "AI credibility reason",
     notifyLevel: overrides.notifyLevel ?? "medium",
     relevanceScore: overrides.relevanceScore ?? 70,
     credibilityRisk: overrides.credibilityRisk ?? 20,
@@ -40,10 +43,21 @@ function makeHotspot(overrides: Partial<HotspotView> = {}): HotspotView {
           snippet: "Signal",
           author: "OpenAI",
           publishedAt: "2026-04-20T10:15:00.000Z",
+          capturedAt: "2026-04-20T10:16:00.000Z",
           freshnessState: "fresh",
           isFreshEvidence: true,
           weight: 1,
-          qualityScore: 82
+          qualityScore: 82,
+          interactionMetrics: {
+            likes: 1200,
+            reposts: 140,
+            replies: 32,
+            views: 28000
+          },
+          authorSignals: {
+            isBlueVerified: true,
+            followers: 1000000
+          }
         },
         {
           sourceKey: "google-news-rss",
@@ -55,10 +69,13 @@ function makeHotspot(overrides: Partial<HotspotView> = {}): HotspotView {
           snippet: "Coverage",
           author: "Reporter",
           publishedAt: "2026-04-20T10:10:00.000Z",
+          capturedAt: "2026-04-20T10:18:00.000Z",
           freshnessState: "fresh",
           isFreshEvidence: true,
           weight: 1,
-          qualityScore: 70
+          qualityScore: 70,
+          interactionMetrics: null,
+          authorSignals: null
         }
       ]
   };
@@ -230,10 +247,13 @@ describe("hotspot-query", () => {
               snippet: "Signal 2",
               author: "OpenAI",
               publishedAt: "2026-04-20T12:00:00.000Z",
+              capturedAt: "2026-04-20T12:02:00.000Z",
               freshnessState: "fresh",
               isFreshEvidence: true,
               weight: 1,
-              qualityScore: 78
+              qualityScore: 78,
+              interactionMetrics: null,
+              authorSignals: null
             }
           ]
         }),
@@ -251,10 +271,13 @@ describe("hotspot-query", () => {
               snippet: "Older coverage",
               author: "Reporter",
               publishedAt: "2026-04-20T09:00:00.000Z",
+              capturedAt: "2026-04-20T09:05:00.000Z",
               freshnessState: "fresh",
               isFreshEvidence: true,
               weight: 1,
-              qualityScore: 70
+              qualityScore: 70,
+              interactionMetrics: null,
+              authorSignals: null
             }
           ]
         })
