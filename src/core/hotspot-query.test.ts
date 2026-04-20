@@ -23,7 +23,7 @@ function makeHotspot(overrides: Partial<HotspotView> = {}): HotspotView {
     evidenceCount: overrides.evidenceCount ?? 2,
     firstSeenAt: overrides.firstSeenAt ?? "2026-04-20T10:00:00.000Z",
     lastSeenAt: overrides.lastSeenAt ?? "2026-04-20T10:30:00.000Z",
-    latestPublishedAt: overrides.latestPublishedAt ?? "2026-04-20T10:15:00.000Z",
+    latestPublishedAt: overrides.latestPublishedAt === undefined ? "2026-04-20T10:15:00.000Z" : overrides.latestPublishedAt,
     notified: overrides.notified ?? false,
     hasFreshPrimaryEvidence: overrides.hasFreshPrimaryEvidence ?? true,
     candidateState: overrides.candidateState ?? "fresh_hotspot_candidate",
@@ -112,6 +112,73 @@ describe("hotspot-query", () => {
     expect(result.map((item) => item.id)).toEqual(["high", "medium"]);
   });
 
+  it("sorts by importance using final score and freshness as tie breakers", () => {
+    const result = applyHotspotListQuery(
+      [
+        makeHotspot({ id: "fresh-high", notifyLevel: "high", finalScore: 80, freshnessScore: 90 }),
+        makeHotspot({ id: "stale-high", notifyLevel: "high", finalScore: 80, freshnessScore: 60 }),
+        makeHotspot({ id: "lower-high", notifyLevel: "high", finalScore: 70, freshnessScore: 99 })
+      ],
+      { sort: "importance", levels: [] },
+      "all"
+    );
+
+    expect(result.map((item) => item.id)).toEqual(["fresh-high", "stale-high", "lower-high"]);
+  });
+
+  it("sorts by heat using unified heat score before velocity", () => {
+    const result = applyHotspotListQuery(
+      [
+        makeHotspot({
+          id: "hottest",
+          velocityScore: 60,
+          sourceDiversityScore: 85,
+          sourceReliabilityScore: 88,
+          sourceAuthorityScore: 80,
+          freshnessScore: 92,
+          evidenceCount: 4
+        }),
+        makeHotspot({
+          id: "warmer",
+          velocityScore: 90,
+          sourceDiversityScore: 40,
+          sourceReliabilityScore: 45,
+          sourceAuthorityScore: 38,
+          freshnessScore: 62,
+          evidenceCount: 2
+        }),
+        makeHotspot({
+          id: "cooler",
+          velocityScore: 40,
+          sourceDiversityScore: 30,
+          sourceReliabilityScore: 35,
+          sourceAuthorityScore: 30,
+          freshnessScore: 50,
+          evidenceCount: 1
+        })
+      ],
+      { sort: "heat", levels: [] },
+      "all"
+    );
+
+    expect(result.map((item) => item.id)).toEqual(["hottest", "warmer", "cooler"]);
+    expect(result[0]?.heatScore).toBeGreaterThan(result[1]?.heatScore ?? 0);
+  });
+
+  it("sorts by relevance before final score", () => {
+    const result = applyHotspotListQuery(
+      [
+        makeHotspot({ id: "most-relevant", relevanceScore: 94, finalScore: 20 }),
+        makeHotspot({ id: "less-relevant", relevanceScore: 80, finalScore: 99 }),
+        makeHotspot({ id: "same-relevance-higher-final", relevanceScore: 80, finalScore: 60 })
+      ],
+      { sort: "relevance", levels: [] },
+      "all"
+    );
+
+    expect(result.map((item) => item.id)).toEqual(["most-relevant", "less-relevant", "same-relevance-higher-final"]);
+  });
+
   it("sorts by published time with missing dates at the end", () => {
     const result = applyHotspotListQuery(
       [
@@ -124,6 +191,74 @@ describe("hotspot-query", () => {
     );
 
     expect(result.map((item) => item.id)).toEqual(["newest", "older", "no-date"]);
+  });
+
+  it("sorts by discovered time using first seen timestamp", () => {
+    const result = applyHotspotListQuery(
+      [
+        makeHotspot({ id: "oldest", firstSeenAt: "2026-04-20T08:00:00.000Z", finalScore: 99 }),
+        makeHotspot({ id: "newest", firstSeenAt: "2026-04-20T12:00:00.000Z", finalScore: 10 }),
+        makeHotspot({ id: "middle", firstSeenAt: "2026-04-20T10:00:00.000Z", finalScore: 50 })
+      ],
+      { sort: "discovered", levels: [] },
+      "all"
+    );
+
+    expect(result.map((item) => item.id)).toEqual(["newest", "middle", "oldest"]);
+  });
+
+  it("derives published time from evidence when latestPublishedAt is missing", () => {
+    const result = applyHotspotListQuery(
+      [
+        makeHotspot({
+          id: "derived-late",
+          latestPublishedAt: null,
+          evidence: [
+            {
+              sourceKey: "twitter-api",
+              sourceLabel: "Twitter",
+              evidenceFamily: "social",
+              discoverySource: "twitter-api",
+              url: "https://x.com/openai/status/2",
+              title: "Tweet 2",
+              snippet: "Signal 2",
+              author: "OpenAI",
+              publishedAt: "2026-04-20T12:00:00.000Z",
+              freshnessState: "fresh",
+              isFreshEvidence: true,
+              weight: 1,
+              qualityScore: 78
+            }
+          ]
+        }),
+        makeHotspot({
+          id: "derived-early",
+          latestPublishedAt: null,
+          evidence: [
+            {
+              sourceKey: "google-news-rss",
+              sourceLabel: "Google News",
+              evidenceFamily: "search_discovery",
+              discoverySource: "google-news-rss",
+              url: "https://news.example.com/older",
+              title: "Older",
+              snippet: "Older coverage",
+              author: "Reporter",
+              publishedAt: "2026-04-20T09:00:00.000Z",
+              freshnessState: "fresh",
+              isFreshEvidence: true,
+              weight: 1,
+              qualityScore: 70
+            }
+          ]
+        })
+      ],
+      { sort: "published", levels: [] },
+      "all"
+    );
+
+    expect(result.map((item) => item.id)).toEqual(["derived-late", "derived-early"]);
+    expect(result[0]?.latestPublishedAt).toBe("2026-04-20T12:00:00.000Z");
   });
 
   it("computes a unified heat score across mixed evidence", () => {
