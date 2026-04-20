@@ -1,33 +1,22 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
   Bell,
-  Bolt,
+  Bot,
   Clock3,
   Mail,
-  Radar,
+  PencilLine,
   RefreshCw,
-  Search,
   Settings2,
-  ShieldAlert,
-  ShieldCheck,
   Sparkles,
-  TrendingUp
+  Waves
 } from "lucide-react";
 import type { DashboardData, HotspotListQuery, NotificationLevel, SourceRecord } from "@/core/contracts";
 import { HotspotBoard } from "@/components/hotspot-board";
-import { BackgroundBeams } from "@/components/ui/aceternity/background-beams";
-import { CardSpotlight } from "@/components/ui/aceternity/card-spotlight";
-import { Spotlight } from "@/components/ui/aceternity/spotlight";
-
-const levelStyles: Record<NotificationLevel, string> = {
-  high: "border-amber-300/30 bg-amber-300/14 text-amber-100",
-  medium: "border-cyan-300/25 bg-cyan-300/12 text-cyan-100",
-  low: "border-white/14 bg-white/6 text-slate-200"
-};
+import { cn } from "@/lib/utils";
 
 const sourceKinds: Record<SourceRecord["kind"], string> = {
   search: "网页搜索",
@@ -37,9 +26,15 @@ const sourceKinds: Record<SourceRecord["kind"], string> = {
 };
 
 const statusStyles: Record<SourceRecord["lastStatus"], string> = {
-  ok: "border-emerald-300/30 bg-emerald-300/12 text-emerald-100",
-  idle: "border-white/10 bg-white/6 text-slate-300",
-  error: "border-red-300/30 bg-red-300/12 text-red-100"
+  ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  idle: "border-stone-200 bg-white text-stone-600",
+  error: "border-red-200 bg-red-50 text-red-600"
+};
+
+const levelStyles: Record<NotificationLevel, string> = {
+  high: "border-amber-300 bg-amber-100 text-amber-500",
+  medium: "border-blue-200 bg-blue-50 text-blue-700",
+  low: "border-stone-200 bg-white text-stone-600"
 };
 
 export function DashboardShell({
@@ -63,18 +58,11 @@ export function DashboardShell({
 
   const metrics = useMemo(() => {
     const highCount = initialData.hotspots.filter((item) => item.notifyLevel === "high").length;
-    const breaking = initialData.hotspots[0];
     return {
       highCount,
       healthySources: initialData.sources.filter((item) => item.lastStatus === "ok" || item.lastStatus === "idle").length,
       totalMonitors: initialData.monitors.length,
-      averageConfidence:
-        initialData.hotspots.length === 0
-          ? 0
-          : Math.round(
-              initialData.hotspots.reduce((sum, item) => sum + (100 - item.credibilityRisk), 0) / initialData.hotspots.length
-            ),
-      breaking
+      breaking: initialData.hotspots[0]
     };
   }, [initialData]);
 
@@ -127,262 +115,248 @@ export function DashboardShell({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden px-4 py-5 md:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
-        <section className="relative overflow-hidden rounded-[36px] border border-white/10 bg-[linear-gradient(180deg,rgba(5,10,18,0.96),rgba(5,9,16,0.92))] px-5 py-5 shadow-[0_30px_120px_rgba(2,6,23,0.45)] md:px-7 md:py-7">
-          <BackgroundBeams className="opacity-90" />
-          <Spotlight />
-          <div className="radar-grid absolute inset-0 opacity-60" />
-
-          <div className="relative z-10 grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
-            <CardSpotlight className="min-h-[28rem] p-6 md:p-8">
-              <div className="flex h-full flex-col justify-between gap-8">
-                <div className="space-y-6">
-                  <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.34em] text-slate-300/80">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
-                      <Radar className="h-3.5 w-3.5" />
-                      Radar Desk
-                    </span>
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                      <Clock3 className="h-3.5 w-3.5" />
-                      每 30 分钟自动巡检
-                    </span>
-                  </div>
-
-                  <div className="max-w-4xl space-y-4">
-                    <h1 className="font-display text-4xl leading-none tracking-[-0.05em] text-white md:text-6xl xl:text-7xl">Hot Pulse</h1>
-                    <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                      一个为 AI 创作者打造的热点指挥台。我们把 X、搜索、社区与官方信号压缩进一条情报流，让你更快判断什么值得立刻追、立刻写、立刻发。
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <SignalMetric icon={Bolt} label="高优先级热点" value={String(metrics.highCount)} hint="适合优先判断是否立即开写" tone="amber" />
-                    <SignalMetric
-                      icon={ShieldCheck}
-                      label="来源健康"
-                      value={`${metrics.healthySources}/${initialData.sources.length}`}
-                      hint="当前可用采集源"
-                      tone="cyan"
-                    />
-                    <SignalMetric icon={Search} label="监控规则" value={String(metrics.totalMonitors)} hint="关键词与主题并行追踪" tone="emerald" />
-                    <SignalMetric
-                      icon={TrendingUp}
-                      label="平均可信"
-                      value={`${metrics.averageConfidence}%`}
-                      hint="综合风险后的参考值"
-                      tone="violet"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-4 border-t border-white/10 pt-5 md:flex-row md:items-end md:justify-between">
-                  <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.28em] text-slate-400">建议动作</p>
-                    <div className="space-y-1">
-                      <p className="text-lg font-semibold text-white">
-                        {metrics.breaking ? `优先处理：${metrics.breaking.title}` : "先执行一次扫描，开始建立你的热点雷达。"}
-                      </p>
-                      <p className="max-w-2xl text-sm text-slate-300">
-                        {metrics.breaking
-                          ? `它当前拥有 ${metrics.breaking.evidenceCount} 条证据，综合分 ${metrics.breaking.finalScore}，适合先看证据再决定是否对外分享。`
-                          : "系统会自动聚合多源重复出现的内容，避免你在多个信息流之间来回切换。"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3">
-                    <ActionButton icon={RefreshCw} loading={pending} onClick={() => runMutation(triggerScan)}>
-                      立即扫描
-                    </ActionButton>
-                    <ActionButton icon={Mail} loading={pending} onClick={() => runMutation(triggerTestEmail)} variant="secondary">
-                      发送测试通知
-                    </ActionButton>
-                  </div>
-                </div>
+    <main className="editor-paper min-h-screen px-4 py-5 md:px-6 lg:px-8">
+      <div className="mx-auto grid max-w-[1520px] gap-6">
+        <header className="rounded-[36px] border border-stone-200 bg-white/85 p-5 shadow-[0_24px_70px_rgba(35,31,27,0.08)] backdrop-blur md:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-700">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Hot Pulse
+                </span>
+                <StatusChip active icon={Clock3} label="每 30 分钟自动扫描" />
+                <StatusChip active={initialData.env.hasOpenRouter} icon={Bot} label={initialData.env.hasOpenRouter ? "OpenRouter 已就绪" : "OpenRouter 待配置"} />
+                <StatusChip active={initialData.env.hasEmail} icon={Mail} label={initialData.env.hasEmail ? "邮件通知可用" : "邮件通知待配置"} />
               </div>
-            </CardSpotlight>
 
-            <div className="grid gap-4">
-              <CardSpotlight className="p-5">
-                <SectionHeader title="作战状态" subtitle="关键能力是否已经就绪" icon={Activity} compact />
-                <div className="mt-5 grid gap-3">
-                  <ReadinessRow label="OpenRouter 分析" value={initialData.env.hasOpenRouter ? "已连接" : "缺少密钥"} active={initialData.env.hasOpenRouter} />
-                  <ReadinessRow label="twitterapi.io" value={initialData.env.hasTwitterApi ? "已连接" : "缺少密钥"} active={initialData.env.hasTwitterApi} />
-                  <ReadinessRow label="邮件提醒" value={initialData.env.hasEmail ? "可发送" : "未配置"} active={initialData.env.hasEmail} />
-                </div>
-              </CardSpotlight>
+              <div className="space-y-3">
+                <h1 className="max-w-5xl font-display text-4xl leading-none tracking-[-0.06em] text-ink-950 md:text-[4.25rem]">
+                  你的 AI 内容编辑台
+                </h1>
+                <p className="max-w-3xl text-sm leading-7 text-stone-600 md:text-base">
+                  这里不是一个会分散注意力的后台，而是一张专门给你判断选题的首页。首屏只保留最值得立刻处理的热点，其余规则、通知和来源配置都收进次级面板，让你先看见内容，再做动作。
+                </p>
+              </div>
+            </div>
 
-              <CardSpotlight className="p-5">
-                <SectionHeader title="新增监控规则" subtitle="先把你最想抢的选题盯住" icon={Sparkles} compact />
-                <div className="mt-5 grid gap-3">
-                  <InputField
-                    label="规则名称"
-                    onChange={(value) => setMonitorForm((state) => ({ ...state, label: value }))}
-                    placeholder="例如：OpenAI 新模型"
-                    value={monitorForm.label}
-                  />
-                  <InputField
-                    label="监控查询"
-                    onChange={(value) => setMonitorForm((state) => ({ ...state, query: value }))}
-                    placeholder="例如：OpenAI release OR new model"
-                    value={monitorForm.query}
-                  />
-                  <label className="grid gap-2">
-                    <span className="text-[11px] uppercase tracking-[0.26em] text-slate-400">监控模式</span>
-                    <select
-                      className="h-12 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none transition focus:border-cyan-300/50"
-                      onChange={(event) => setMonitorForm((state) => ({ ...state, mode: event.target.value }))}
-                      value={monitorForm.mode}
-                    >
-                      <option value="keyword">关键词</option>
-                      <option value="topic">主题</option>
-                    </select>
-                  </label>
-                  <label className="grid gap-2">
-                    <span className="text-[11px] uppercase tracking-[0.26em] text-slate-400">别名 / 同义写法</span>
-                    <textarea
-                      className="min-h-24 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
-                      onChange={(event) => setMonitorForm((state) => ({ ...state, aliases: event.target.value }))}
-                      placeholder="例如：GPT-5.4, GPT 5.4, OpenAI GPT"
-                      value={monitorForm.aliases}
-                    />
-                  </label>
-                  <button
-                    className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100 disabled:opacity-50"
-                    disabled={pending || !monitorForm.label || !monitorForm.query}
-                    onClick={() =>
-                      runMutation(async () => {
-                        await createMonitor();
-                        setMonitorForm({ label: "", query: "", mode: "keyword", aliases: "" });
-                      })
-                    }
-                  >
-                    添加规则
-                  </button>
-                </div>
-              </CardSpotlight>
+            <div className="flex flex-wrap gap-3">
+              <ActionButton icon={RefreshCw} loading={pending} onClick={() => runMutation(triggerScan)}>
+                立即扫描
+              </ActionButton>
+              <ActionButton icon={Mail} loading={pending} onClick={() => runMutation(triggerTestEmail)} variant="secondary">
+                发送测试通知
+              </ActionButton>
             </div>
           </div>
-        </section>
 
-        <section className="grid gap-5 xl:grid-cols-[1.28fr_0.72fr]">
+          <div className="mt-6 grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+            <MetricCard label="高优先级热点" value={String(metrics.highCount)} hint="适合优先判断是否做成内容" />
+            <MetricCard
+              label="来源健康"
+              value={`${metrics.healthySources}/${initialData.sources.length}`}
+              hint="当前可用的信息来源数量"
+            />
+            <MetricCard label="监控规则" value={String(metrics.totalMonitors)} hint="你正在持续跟踪的关键词与主题" />
+            <MetricCard
+              label="编辑建议"
+              value={metrics.breaking ? "有" : "无"}
+              hint={metrics.breaking ? "当前已有值得优先查看的候选热点" : "先执行一次扫描，建立今天的选题面"}
+            />
+          </div>
+        </header>
+
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_23rem]">
           <HotspotBoard hotspots={initialData.hotspots} monitors={initialData.monitors} query={hotspotQuery} sources={initialData.sources} />
 
-          <div className="grid gap-5">
-            <SectionHeader title="通知与运行" subtitle="盯住输出节奏，避免漏掉最佳发布窗口" icon={Bell} />
+          <aside className="grid h-fit gap-4 xl:sticky xl:top-5">
+            <SidebarCard
+              title="编辑简报"
+              subtitle="把系统状态压缩成几个你真正会看的信号"
+              icon={Waves}
+            >
+              <div className="grid gap-3">
+                <ReadinessRow label="OpenRouter" value={initialData.env.hasOpenRouter ? "已连接" : "待配置"} active={initialData.env.hasOpenRouter} />
+                <ReadinessRow label="twitterapi.io" value={initialData.env.hasTwitterApi ? "已连接" : "待配置"} active={initialData.env.hasTwitterApi} />
+                <ReadinessRow label="邮件提醒" value={initialData.env.hasEmail ? "可发送" : "待配置"} active={initialData.env.hasEmail} />
+              </div>
+            </SidebarCard>
 
-            <CardSpotlight className="p-5">
-              <SectionHeader title="通知收件箱" subtitle="高优先级热点会先落这里" icon={Mail} compact />
-              <div className="mt-4 grid gap-3">
-                {initialData.notifications.length === 0 ? (
-                  <EmptyPanel
-                    compact
-                    description="一旦高优先级热点满足推送条件，系统会先写入站内收件箱，再按配置发送邮件。"
-                    title="还没有通知记录"
+            <SidebarCard title="新增监控规则" subtitle="先把你最近最想抢的主题盯住" icon={PencilLine}>
+              <div className="grid gap-3">
+                <InputField
+                  label="规则名称"
+                  value={monitorForm.label}
+                  onChange={(value) => setMonitorForm((state) => ({ ...state, label: value }))}
+                  placeholder="例如：OpenAI 新模型"
+                />
+                <InputField
+                  label="监控查询"
+                  value={monitorForm.query}
+                  onChange={(value) => setMonitorForm((state) => ({ ...state, query: value }))}
+                  placeholder="例如：OpenAI release OR new model"
+                />
+                <label className="grid gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">监控模式</span>
+                  <select
+                    className="h-12 rounded-[18px] border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 outline-none transition focus:border-blue-300"
+                    onChange={(event) => setMonitorForm((state) => ({ ...state, mode: event.target.value }))}
+                    value={monitorForm.mode}
+                  >
+                    <option value="keyword">关键词</option>
+                    <option value="topic">主题</option>
+                  </select>
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">别名 / 同义写法</span>
+                  <textarea
+                    className="min-h-24 rounded-[18px] border border-stone-200 bg-paper-50 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-stone-400 focus:border-blue-300"
+                    onChange={(event) => setMonitorForm((state) => ({ ...state, aliases: event.target.value }))}
+                    placeholder="例如：GPT-5.4, GPT 5.4, OpenAI GPT"
+                    value={monitorForm.aliases}
                   />
+                </label>
+                <button
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-ink-950 px-4 text-sm font-semibold text-white transition hover:bg-ink-900 disabled:opacity-50"
+                  disabled={pending || !monitorForm.label || !monitorForm.query}
+                  onClick={() =>
+                    runMutation(async () => {
+                      await createMonitor();
+                      setMonitorForm({ label: "", query: "", mode: "keyword", aliases: "" });
+                    })
+                  }
+                >
+                  添加规则
+                </button>
+              </div>
+            </SidebarCard>
+
+            <SidebarCard title="通知收件箱" subtitle="高优先级提醒先落在这里" icon={Bell}>
+              <div className="grid gap-3">
+                {initialData.notifications.length === 0 ? (
+                  <EmptySidebar text="还没有通知记录。满足条件的热点会先进入这里，方便你稍后统一处理。" />
                 ) : (
-                  initialData.notifications.slice(0, 8).map((item) => (
-                    <div key={item.id} className="rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3">
+                  initialData.notifications.slice(0, 5).map((item) => (
+                    <div key={item.id} className="rounded-[22px] border border-stone-200 bg-paper-50 p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold text-white">{item.subject}</p>
-                          <p className="text-xs text-slate-400">{formatDateTime(item.createdAt)}</p>
+                        <div>
+                          <p className="text-sm font-semibold text-ink-950">{item.subject}</p>
+                          <p className="mt-1 text-xs text-stone-500">{formatDateTime(item.createdAt)}</p>
                         </div>
-                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${levelStyles[item.level]}`}>
+                        <span className={cn("rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]", levelStyles[item.level])}>
                           {item.level}
                         </span>
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-300">{item.body}</p>
+                      <p className="mt-3 text-sm leading-7 text-stone-600">{item.body}</p>
                     </div>
                   ))
                 )}
               </div>
-            </CardSpotlight>
+            </SidebarCard>
 
-            <CardSpotlight className="p-5">
-              <SectionHeader title="运行时间线" subtitle="最近的扫描执行情况" icon={Clock3} compact />
-              <div className="mt-5 space-y-4">
+            <SidebarCard title="最近运行" subtitle="只看最近几次扫描有没有异常" icon={Activity}>
+              <div className="grid gap-3">
                 {initialData.recentRuns.length === 0 ? (
-                  <EmptyPanel compact description="点击“立即扫描”后，这里会出现最近一次任务的状态、候选数和通知数。" title="还没有运行记录" />
+                  <EmptySidebar text="这里会显示最近扫描的结果和异常信息，方便你快速确认链路是否正常。" />
                 ) : (
                   initialData.recentRuns.map((run) => (
-                    <div key={run.id} className="relative pl-6">
-                      <span className="absolute left-2 top-1 h-full w-px bg-white/10" />
-                      <span className="absolute left-0 top-1.5 h-4 w-4 rounded-full border border-cyan-300/40 bg-cyan-300/10" />
-                      <div className="rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                            <ShieldAlert className="h-4 w-4 text-amber-200" />
-                            {run.trigger === "api" ? "API 触发" : run.trigger === "scheduled" ? "定时任务" : "手动触发"}
-                          </div>
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">{run.status}</span>
+                    <div key={run.id} className="rounded-[22px] border border-stone-200 bg-paper-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-ink-950">
+                          {run.trigger === "api" ? "API 触发" : run.trigger === "scheduled" ? "定时任务" : "手动触发"}
                         </div>
-                        <p className="mt-3 text-sm text-slate-300">
-                          候选 {run.summary.candidates} / 热点 {run.summary.hotspots} / 通知 {run.summary.notifications}
-                        </p>
-                        {run.errorMessage ? <p className="mt-2 text-sm text-red-200">{run.errorMessage}</p> : null}
+                        <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[11px] text-stone-600">{run.status}</span>
                       </div>
+                      <p className="mt-2 text-sm text-stone-600">
+                        候选 {run.summary.candidates} / 热点 {run.summary.hotspots} / 通知 {run.summary.notifications}
+                      </p>
+                      {run.errorMessage ? <p className="mt-2 text-sm text-red-600">{run.errorMessage}</p> : null}
                     </div>
                   ))
                 )}
               </div>
-            </CardSpotlight>
-          </div>
-        </section>
+            </SidebarCard>
 
-        <section className="grid gap-5">
-          <SectionHeader title="来源控制台" subtitle="调整采集策略，但保持第一屏专注于热点判断" icon={Settings2} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {initialData.sources.map((source) => (
-              <CardSpotlight key={source.id} className="p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-display text-xl text-white">{source.label}</h3>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles[source.lastStatus]}`}>{source.lastStatus}</span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">{sourceKinds[source.kind]}</span>
+            <SidebarCard title="来源面板" subtitle="配置入口还在，但不再挤占首页主视线" icon={Settings2}>
+              <div className="grid gap-3">
+                {initialData.sources.map((source) => (
+                  <details key={source.id} className="rounded-[22px] border border-stone-200 bg-paper-50 p-4">
+                    <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-ink-950">{source.label}</p>
+                          <span className={cn("rounded-full border px-2.5 py-1 text-[11px]", statusStyles[source.lastStatus])}>{source.lastStatus}</span>
+                        </div>
+                        <p className="text-xs text-stone-500">
+                          {sourceKinds[source.kind]} · {source.key}
+                        </p>
+                      </div>
+                      <span className="text-xs text-stone-500">{source.enabled ? "已启用" : "已停用"}</span>
+                    </summary>
+
+                    <div className="mt-4 grid gap-3">
+                      {source.errorMessage ? <p className="text-sm text-red-600">{source.errorMessage}</p> : null}
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className={cn(
+                            "rounded-full px-3 py-2 text-xs font-semibold transition",
+                            source.enabled
+                              ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                              : "border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                          )}
+                          onClick={() => runMutation(() => toggleSource(source))}
+                        >
+                          {source.enabled ? "停用来源" : "启用来源"}
+                        </button>
+                      </div>
+
+                      <textarea
+                        className="min-h-36 rounded-[18px] border border-stone-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-ink-950 outline-none transition focus:border-blue-300"
+                        onChange={(event) => setSourceDrafts((drafts) => ({ ...drafts, [source.id]: event.target.value }))}
+                        value={sourceDrafts[source.id] || ""}
+                      />
+                      <button
+                        className="inline-flex h-11 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-ink-950 transition hover:bg-paper-50"
+                        onClick={() => runMutation(() => saveSourceConfig(source))}
+                      >
+                        保存来源配置
+                      </button>
                     </div>
-                    <p className="text-sm text-slate-400">{source.key}</p>
-                    {source.errorMessage ? <p className="text-sm text-red-200">{source.errorMessage}</p> : null}
-                  </div>
-
-                  <button
-                    className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
-                      source.enabled
-                        ? "border border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/18"
-                        : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
-                    }`}
-                    onClick={() => runMutation(() => toggleSource(source))}
-                  >
-                    {source.enabled ? "已启用" : "已停用"}
-                  </button>
-                </div>
-
-                <div className="mt-5 grid gap-3">
-                  <details className="group rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
-                    <summary className="cursor-pointer list-none text-sm font-medium text-white">查看与编辑 JSON 配置</summary>
-                    <p className="mt-2 text-xs leading-6 text-slate-400">这里保留高级配置入口，避免日常操作被大段 JSON 打断。</p>
-                    <textarea
-                      className="mt-4 min-h-40 w-full rounded-[18px] border border-white/10 bg-slate-950/60 px-4 py-3 font-mono text-xs leading-6 text-slate-100 outline-none transition focus:border-cyan-300/50"
-                      onChange={(event) => setSourceDrafts((drafts) => ({ ...drafts, [source.id]: event.target.value }))}
-                      value={sourceDrafts[source.id] || ""}
-                    />
                   </details>
-
-                  <button
-                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:border-cyan-300/35 hover:bg-cyan-300/10"
-                    onClick={() => runMutation(() => saveSourceConfig(source))}
-                  >
-                    保存来源配置
-                  </button>
-                </div>
-              </CardSpotlight>
-            ))}
-          </div>
+                ))}
+              </div>
+            </SidebarCard>
+          </aside>
         </section>
       </div>
     </main>
+  );
+}
+
+function SidebarCard({
+  title,
+  subtitle,
+  icon: Icon,
+  children
+}: {
+  title: string;
+  subtitle: string;
+  icon: typeof Waves;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[30px] border border-stone-200 bg-white/90 p-5 shadow-[0_24px_70px_rgba(35,31,27,0.08)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">{subtitle}</p>
+          <h2 className="mt-2 font-display text-2xl tracking-[-0.04em] text-ink-950">{title}</h2>
+        </div>
+        <span className="rounded-full border border-stone-200 bg-paper-50 p-3 text-stone-600">
+          <Icon className="h-4.5 w-4.5" />
+        </span>
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
@@ -394,93 +368,78 @@ function ActionButton({
   variant = "primary"
 }: {
   icon: typeof RefreshCw;
-  children: React.ReactNode;
+  children: ReactNode;
   loading: boolean;
   onClick: () => void;
   variant?: "primary" | "secondary";
 }) {
   return (
     <button
-      className={`inline-flex h-12 items-center gap-2 rounded-full px-5 text-sm font-semibold transition disabled:opacity-50 ${
+      className={cn(
+        "inline-flex h-12 items-center gap-2 rounded-full px-5 text-sm font-semibold transition disabled:opacity-50",
         variant === "primary"
-          ? "bg-white text-slate-950 hover:bg-cyan-100"
-          : "border border-white/12 bg-white/6 text-white hover:border-cyan-300/35 hover:bg-cyan-300/10"
-      }`}
+          ? "bg-ink-950 text-white hover:bg-ink-900"
+          : "border border-stone-200 bg-white text-ink-950 hover:bg-paper-50"
+      )}
       disabled={loading}
       onClick={onClick}
     >
-      <Icon className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+      <Icon className={cn("h-4 w-4", loading && "animate-spin")} />
       {children}
     </button>
   );
 }
 
-function SectionHeader({
-  title,
-  subtitle,
+function StatusChip({
+  label,
   icon: Icon,
-  compact = false
+  active
 }: {
-  title: string;
-  subtitle: string;
-  icon: typeof Bolt;
-  compact?: boolean;
+  label: string;
+  icon: typeof Clock3;
+  active: boolean;
 }) {
   return (
-    <div className={`flex items-center justify-between gap-3 ${compact ? "" : "mb-1"}`}>
-      <div>
-        <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">{subtitle}</p>
-        <h2 className="mt-2 font-display text-2xl tracking-[-0.03em] text-white">{title}</h2>
-      </div>
-      <div className="rounded-full border border-white/10 bg-white/5 p-3 text-cyan-100">
-        <Icon className="h-5 w-5" />
-      </div>
-    </div>
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.16em]",
+        active ? "border-stone-200 bg-white text-stone-600" : "border-red-200 bg-red-50 text-red-600"
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </span>
   );
 }
 
-function SignalMetric({
-  icon: Icon,
+function MetricCard({
   label,
   value,
-  hint,
-  tone
+  hint
 }: {
-  icon: typeof Bolt;
   label: string;
   value: string;
   hint: string;
-  tone: "amber" | "cyan" | "emerald" | "violet";
 }) {
-  const accentMap = {
-    amber: "text-amber-200 border-amber-300/20 bg-amber-300/10",
-    cyan: "text-cyan-100 border-cyan-300/20 bg-cyan-300/10",
-    emerald: "text-emerald-100 border-emerald-300/20 bg-emerald-300/10",
-    violet: "text-violet-100 border-violet-300/20 bg-violet-300/10"
-  } as const;
-
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className={`rounded-full border px-2.5 py-1 ${accentMap[tone]}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-        <span className="font-display text-3xl tracking-[-0.04em] text-white">{value}</span>
+    <div className="rounded-[26px] border border-stone-200 bg-paper-50 p-4">
+      <div className="flex items-end justify-between gap-3">
+        <p className="text-sm font-semibold text-ink-950">{label}</p>
+        <span className="font-display text-3xl tracking-[-0.04em] text-ink-950">{value}</span>
       </div>
-      <p className="mt-4 text-sm font-semibold text-slate-100">{label}</p>
-      <p className="mt-1 text-xs leading-5 text-slate-400">{hint}</p>
+      <p className="mt-2 text-xs leading-6 text-stone-500">{hint}</p>
     </div>
   );
 }
 
 function ReadinessRow({ label, value, active }: { label: string; value: string; active: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3">
+    <div className="flex items-center justify-between rounded-[20px] border border-stone-200 bg-paper-50 px-4 py-3">
       <div>
-        <p className="text-sm font-medium text-white">{label}</p>
-        <p className="mt-1 text-xs text-slate-400">{value}</p>
+        <p className="text-sm font-medium text-ink-950">{label}</p>
+        <p className="mt-1 text-xs text-stone-500">{value}</p>
       </div>
-      <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.85)]" : "bg-slate-500"}`} />
+      <span className={cn("h-2.5 w-2.5 rounded-full", active ? "bg-emerald-500" : "bg-stone-300")} />
     </div>
   );
 }
@@ -498,9 +457,9 @@ function InputField({
 }) {
   return (
     <label className="grid gap-2">
-      <span className="text-[11px] uppercase tracking-[0.26em] text-slate-400">{label}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">{label}</span>
       <input
-        className="h-12 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/50"
+        className="h-12 rounded-[18px] border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 outline-none transition placeholder:text-stone-400 focus:border-blue-300"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         value={value}
@@ -509,15 +468,10 @@ function InputField({
   );
 }
 
-function EmptyPanel({ title, description, compact = false }: { title: string; description: string; compact?: boolean }) {
+function EmptySidebar({ text }: { text: string }) {
   return (
-    <div
-      className={`flex flex-col items-start justify-center rounded-[24px] border border-dashed border-white/14 bg-white/[0.03] px-5 py-6 ${
-        compact ? "" : "min-h-52"
-      }`}
-    >
-      <h3 className="font-display text-xl text-white">{title}</h3>
-      <p className="mt-3 max-w-lg text-sm leading-7 text-slate-400">{description}</p>
+    <div className="rounded-[22px] border border-dashed border-stone-300 bg-paper-50 p-4 text-sm leading-7 text-stone-500">
+      {text}
     </div>
   );
 }

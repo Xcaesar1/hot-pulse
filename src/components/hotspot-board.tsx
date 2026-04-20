@@ -1,17 +1,42 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarClock, ChevronDown, ExternalLink, Filter, Flame, Layers3, RadioTower, RotateCcw, SlidersHorizontal } from "lucide-react";
-import type { HotspotListQuery, HotspotSort, HotspotTimeRange, HotspotView, MonitorRecord, NotificationLevel, SourceRecord } from "@/core/contracts";
+import {
+  ArrowUpRight,
+  CalendarClock,
+  ChevronDown,
+  Eye,
+  Filter,
+  Flame,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Waves
+} from "lucide-react";
+import type {
+  HotspotListQuery,
+  HotspotSort,
+  HotspotTimeRange,
+  HotspotView,
+  MonitorRecord,
+  NotificationLevel,
+  SourceRecord
+} from "@/core/contracts";
 import { buildHotspotQueryString, getDefaultHotspotListQuery, normalizeHotspotListQuery } from "@/core/hotspot-query";
-import { CardSpotlight } from "@/components/ui/aceternity/card-spotlight";
+import { cn } from "@/lib/utils";
 
-const levelStyles: Record<NotificationLevel, string> = {
-  high: "border-amber-300/30 bg-amber-300/14 text-amber-100",
-  medium: "border-cyan-300/25 bg-cyan-300/12 text-cyan-100",
-  low: "border-white/14 bg-white/6 text-slate-200"
+const levelBadgeStyles: Record<NotificationLevel, string> = {
+  high: "border-amber-300 bg-amber-100 text-amber-500",
+  medium: "border-blue-200 bg-blue-50 text-blue-700",
+  low: "border-stone-200 bg-white text-stone-600"
+};
+
+const levelLabels: Record<NotificationLevel, string> = {
+  high: "HIGH",
+  medium: "MEDIUM",
+  low: "LOW"
 };
 
 const sortLabels: Record<HotspotSort, string> = {
@@ -44,6 +69,7 @@ export function HotspotBoard({
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
+  const [expandedHotspotId, setExpandedHotspotId] = useState<string | null>(hotspots[0]?.id ?? null);
 
   const sourceOptions = useMemo(
     () =>
@@ -71,10 +97,12 @@ export function HotspotBoard({
     const tags: string[] = [];
 
     if (query.timeRange !== defaults.timeRange) tags.push(timeRangeLabels[query.timeRange]);
-    if (query.levels.join(",") !== defaults.levels.join(",")) tags.push(`重要性: ${query.levels.join(" / ") || "全部"}`);
-    if (query.sources.length > 0) tags.push(...query.sources.map((item) => `来源: ${sourceLabelMap.get(item) ?? item}`));
-    if (query.monitors.length > 0) tags.push(...query.monitors.map((item) => `关键词: ${item}`));
-    if (query.sort !== defaults.sort) tags.push(`排序: ${sortLabels[query.sort]}`);
+    if (query.levels.join(",") !== defaults.levels.join(",")) {
+      tags.push(`重要性 ${query.levels.map((level) => level.toUpperCase()).join(" / ")}`);
+    }
+    if (query.sources.length > 0) tags.push(...query.sources.map((item) => sourceLabelMap.get(item) ?? item));
+    if (query.monitors.length > 0) tags.push(...query.monitors.map((item) => item));
+    if (query.sort !== defaults.sort) tags.push(sortLabels[query.sort]);
 
     return tags;
   }, [query, sourceLabelMap]);
@@ -97,377 +125,433 @@ export function HotspotBoard({
   }
 
   function resetFilters() {
+    setExpandedHotspotId(hotspots[0]?.id ?? null);
     startTransition(() => {
       router.replace(pathname as Route);
     });
   }
 
-  const sourceSummary =
-    query.sources.length === 0
-      ? "全部来源"
-      : query.sources.length === 1
-        ? sourceLabelMap.get(query.sources[0]) ?? query.sources[0]
-        : `已选 ${query.sources.length} 个来源`;
-
   return (
-    <div className="grid gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">实时热点流</p>
-          <h2 className="mt-2 font-display text-3xl tracking-[-0.04em] text-white">先筛，再判，再开写</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
-            默认只看最近 24 小时内的 high / medium 热点。你可以快速切换来源、重要性和关键词，让列表更贴近你现在要抢的内容窗口。
-          </p>
-        </div>
-
-        <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
-          当前结果 {hotspots.length} 条
-        </div>
-      </div>
-
-      <CardSpotlight className="p-5">
-        <div className="grid gap-4">
-          <div className="grid gap-3 xl:grid-cols-[1.05fr_1fr_1.1fr_0.95fr]">
-            <QuickSelect
-              label="排序"
-              value={query.sort}
-              disabled={pending}
-              onChange={(value) => replaceQuery({ sort: value as HotspotSort })}
-              options={Object.entries(sortLabels).map(([value, label]) => ({ value, label }))}
-            />
-
-            <QuickSelect
-              label="时间范围"
-              value={query.timeRange}
-              disabled={pending}
-              onChange={(value) => replaceQuery({ timeRange: value as HotspotTimeRange })}
-              options={Object.entries(timeRangeLabels).map(([value, label]) => ({ value, label }))}
-            />
-
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.26em] text-slate-400">
-                <Flame className="h-4 w-4 text-amber-200" />
-                重要性
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(["high", "medium", "low"] as NotificationLevel[]).map((level) => {
-                  const active = query.levels.includes(level);
-                  return (
-                    <button
-                      key={level}
-                      type="button"
-                      className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                        active ? levelStyles[level] : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                      }`}
-                      disabled={pending}
-                      onClick={() => toggleValue("levels", level)}
-                    >
-                      {level}
-                    </button>
-                  );
-                })}
-              </div>
+    <section className="grid gap-6">
+      <div className="grid gap-4 rounded-[32px] border border-stone-200 bg-white/90 p-5 shadow-[0_24px_70px_rgba(35,31,27,0.08)] md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-500">
+              <Flame className="h-3.5 w-3.5" />
+              实时热点流
             </div>
-
-            <details className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.26em] text-slate-400">
-                    <RadioTower className="h-4 w-4 text-cyan-200" />
-                    信息来源
-                  </div>
-                  <p className="mt-3 text-sm font-medium text-white">{sourceSummary}</p>
-                </div>
-                <ChevronDown className="h-4 w-4 text-slate-400" />
-              </summary>
-              <div className="mt-4 grid gap-2">
-                {sourceOptions.map((source) => {
-                  const active = query.sources.includes(source.value);
-                  return (
-                    <label
-                      key={source.value}
-                      className={`flex cursor-pointer items-center justify-between rounded-2xl border px-3 py-2 text-sm transition ${
-                        active ? "border-cyan-300/30 bg-cyan-300/10 text-white" : "border-white/10 bg-white/5 text-slate-300"
-                      }`}
-                    >
-                      <span>{source.label}</span>
-                      <input
-                        checked={active}
-                        className="h-4 w-4 accent-cyan-300"
-                        onChange={() => toggleValue("sources", source.value)}
-                        type="checkbox"
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-            </details>
+            <div className="space-y-1">
+              <h2 className="font-display text-3xl tracking-[-0.05em] text-ink-950 md:text-[2.5rem]">先扫读，再判断，再开写</h2>
+              <p className="max-w-3xl text-sm leading-7 text-stone-600">
+                默认聚焦最近 24 小时内值得优先处理的内容。你可以像编辑台一样快速切换排序、来源和关键词，把视图压缩到最适合你当前发稿节奏的一层。
+              </p>
+            </div>
           </div>
 
-          <details className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="rounded-full border border-white/10 bg-white/5 p-2 text-cyan-100">
-                  <SlidersHorizontal className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-white">高级筛选</p>
-                  <p className="text-xs text-slate-400">按监控关键词多选，同时保留完整来源面板和一键重置。</p>
-                </div>
-              </div>
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            </summary>
+          <div className="rounded-full border border-stone-200 bg-paper-50 px-4 py-2 text-sm text-stone-600">
+            当前结果 {hotspots.length} 条
+          </div>
+        </div>
 
-            <div className="mt-4 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.26em] text-slate-400">
-                  <Filter className="h-4 w-4 text-violet-200" />
-                  关键词
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {monitorOptions.map((label) => {
-                    const active = query.monitors.includes(label);
-                    return (
-                      <button
-                        key={label}
-                        type="button"
-                        className={`rounded-full border px-3 py-2 text-sm transition ${
-                          active ? "border-violet-300/30 bg-violet-300/12 text-white" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                        }`}
-                        disabled={pending}
-                        onClick={() => toggleValue("monitors", label)}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+        <div className="grid gap-3">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["discovered", Search],
+                ["published", CalendarClock],
+                ["importance", Flame],
+                ["relevance", Eye],
+                ["heat", Waves]
+              ] as const
+            ).map(([sort, Icon]) => (
+              <button
+                key={sort}
+                type="button"
+                disabled={pending}
+                onClick={() => replaceQuery({ sort })}
+                className={cn(
+                  "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition",
+                  query.sort === sort
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-stone-200 bg-paper-50 text-stone-600 hover:border-stone-300 hover:bg-white"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {sortLabels[sort]}
+              </button>
+            ))}
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.26em] text-slate-400">
-                  <Layers3 className="h-4 w-4 text-emerald-200" />
-                  当前视图
-                </div>
-                <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-300">
-                  <p>排序：{sortLabels[query.sort]}</p>
-                  <p className="mt-2">时间：{timeRangeLabels[query.timeRange]}</p>
-                  <p className="mt-2">重要性：{query.levels.length > 0 ? query.levels.join(" / ") : "全部"}</p>
-                  <p className="mt-2">来源：{sourceSummary}</p>
-                  <p className="mt-2">关键词：{query.monitors.length > 0 ? `${query.monitors.length} 个` : "全部"}</p>
-                </div>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={resetFilters}
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-transparent px-2 text-sm text-stone-500 transition hover:text-ink-950"
+            >
+              <RefreshCw className="h-4 w-4" />
+              重置
+            </button>
+          </div>
 
+          <div className="flex flex-wrap gap-2">
+            <SelectionMenu
+              label="信息来源"
+              summary={query.sources.length === 0 ? "全部来源" : summarizeOptions(query.sources, sourceLabelMap)}
+            >
+              {sourceOptions.map((source) => {
+                const active = query.sources.includes(source.value);
+                return (
+                  <ToggleRow
+                    key={source.value}
+                    active={active}
+                    label={source.label}
+                    onClick={() => toggleValue("sources", source.value)}
+                  />
+                );
+              })}
+            </SelectionMenu>
+
+            <SelectionMenu
+              label="重要性"
+              summary={query.levels.length === 3 ? "High / Medium" : query.levels.map((level) => level.toUpperCase()).join(" / ")}
+            >
+              {(["high", "medium", "low"] as NotificationLevel[]).map((level) => {
+                const active = query.levels.includes(level);
+                return (
+                  <ToggleRow
+                    key={level}
+                    active={active}
+                    label={level.toUpperCase()}
+                    onClick={() => toggleValue("levels", level)}
+                  />
+                );
+              })}
+            </SelectionMenu>
+
+            <SelectionMenu
+              label="关键词"
+              summary={query.monitors.length === 0 ? "全部关键词" : `${query.monitors.length} 个已选`}
+            >
+              {monitorOptions.map((label) => {
+                const active = query.monitors.includes(label);
+                return <ToggleRow key={label} active={active} label={label} onClick={() => toggleValue("monitors", label)} />;
+              })}
+            </SelectionMenu>
+
+            <SelectionMenu label="时间范围" summary={timeRangeLabels[query.timeRange]}>
+              {Object.entries(timeRangeLabels).map(([value, label]) => (
                 <button
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:border-cyan-300/35 hover:bg-cyan-300/10"
-                  disabled={pending}
-                  onClick={resetFilters}
+                  key={value}
                   type="button"
+                  onClick={() => replaceQuery({ timeRange: value as HotspotTimeRange })}
+                  className={cn(
+                    "w-full rounded-2xl px-3 py-2 text-left text-sm transition",
+                    query.timeRange === value ? "bg-blue-50 text-blue-700" : "text-stone-600 hover:bg-stone-100"
+                  )}
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  恢复默认
+                  {label}
                 </button>
-              </div>
-            </div>
-          </details>
+              ))}
+            </SelectionMenu>
+          </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-2">
             {activeTags.length === 0 ? (
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-400">当前使用默认视图</span>
+              <span className="rounded-full border border-stone-200 bg-paper-50 px-3 py-1.5 text-xs text-stone-500">当前使用默认视图</span>
             ) : (
               activeTags.map((tag) => (
-                <span key={tag} className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1.5 text-xs text-cyan-100">
+                <span key={tag} className="rounded-full border border-stone-200 bg-paper-50 px-3 py-1.5 text-xs text-stone-600">
                   {tag}
                 </span>
               ))
             )}
           </div>
         </div>
-      </CardSpotlight>
+      </div>
 
       <div className="grid gap-4">
         {hotspots.length === 0 ? (
-          <CardSpotlight className="p-6">
-            <div className="rounded-[24px] border border-dashed border-white/14 bg-white/[0.03] px-5 py-8">
-              <h3 className="font-display text-2xl text-white">当前筛选下没有热点</h3>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
-                这通常意味着当前窗口过窄，或者这批来源暂时没有足够新鲜、足够重要的内容。你可以放宽时间范围，或恢复默认视图先看全局机会。
-              </p>
-            </div>
-          </CardSpotlight>
+          <div className="rounded-[32px] border border-stone-200 bg-white/90 p-8 shadow-[0_24px_70px_rgba(35,31,27,0.08)]">
+            <h3 className="font-display text-3xl tracking-[-0.04em] text-ink-950">当前视图下暂无值得立即处理的热点</h3>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-stone-600">
+              这通常意味着你把时间窗口压得比较窄，或者当前来源里还没有足够新、足够重要的内容。你可以先放宽时间范围，或者恢复默认视图再看一轮全局机会。
+            </p>
+          </div>
         ) : (
-          hotspots.map((hotspot, index) => (
-            <CardSpotlight key={hotspot.id} className="p-5 md:p-6" color={index === 0 ? "rgba(34, 211, 238, 0.14)" : undefined}>
-              <div className="grid gap-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="max-w-4xl space-y-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] ${levelStyles[hotspot.notifyLevel]}`}>
-                        {hotspot.notifyLevel}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
-                        热度 {hotspot.heatScore}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
-                        发现于 {formatDateTime(hotspot.firstSeenAt)}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
-                        发布于 {formatDateTime(hotspot.latestPublishedAt)}
-                      </span>
-                      {hotspot.notified ? (
-                        <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100">已通知</span>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-3">
-                      <h3 className="max-w-4xl font-display text-2xl leading-tight tracking-[-0.03em] text-white md:text-[2rem]">{hotspot.title}</h3>
-                      <p className="max-w-3xl text-sm leading-7 text-slate-300">{hotspot.summary}</p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {hotspot.monitorLabels.map((label) => (
-                        <span key={`${hotspot.id}-${label}`} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <a
-                    className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2.5 text-sm font-medium text-white transition hover:border-cyan-300/40 hover:bg-cyan-300/10"
-                    href={hotspot.canonicalUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    查看原文
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">多源证据</p>
-                        <p className="mt-1 text-sm text-slate-300">你可以先看来源结构，再决定是不是立刻写。</p>
-                      </div>
-                      <span className="text-xs text-slate-400">最近活跃 {formatDateTime(hotspot.lastSeenAt)}</span>
-                    </div>
-
-                    <div className="mt-4 grid gap-3">
-                      {hotspot.evidence.map((evidence, evidenceIndex) => (
-                        <div key={`${hotspot.id}-${evidence.sourceKey}-${evidenceIndex}`} className="rounded-[20px] border border-white/8 bg-slate-950/45 px-4 py-3">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-semibold text-white">{evidence.sourceLabel}</p>
-                                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-slate-300">
-                                  {evidence.evidenceFamily}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-400">{evidence.author || "匿名来源"}</p>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">质量 {Math.round(evidence.qualityScore)}</span>
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">
-                                {evidence.isFreshEvidence ? "fresh" : evidence.freshnessState}
-                              </span>
-                            </div>
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-slate-300">{evidence.snippet}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3">
-                    <ScorePanel title="综合热度" value={hotspot.heatScore} tone="amber" />
-                    <ScorePanel title="相关性" value={hotspot.relevanceScore} tone="cyan" />
-                    <ScorePanel title="可信度" value={100 - hotspot.credibilityRisk} tone="emerald" />
-                    <ScorePanel title="重要程度" value={importanceToScore(hotspot.notifyLevel)} tone="violet" />
-                  </div>
-                </div>
-              </div>
-            </CardSpotlight>
+          hotspots.map((hotspot) => (
+            <HotspotCard
+              key={hotspot.id}
+              expanded={expandedHotspotId === hotspot.id}
+              hotspot={hotspot}
+              onToggle={() => setExpandedHotspotId((current) => (current === hotspot.id ? null : hotspot.id))}
+            />
           ))
         )}
       </div>
+    </section>
+  );
+}
+
+function HotspotCard({
+  hotspot,
+  expanded,
+  onToggle
+}: {
+  hotspot: HotspotView;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const primarySource = hotspot.evidence[0];
+
+  return (
+    <article className="rounded-[32px] border border-stone-200 bg-white/92 p-5 shadow-[0_24px_70px_rgba(35,31,27,0.08)] transition hover:border-stone-300 md:p-6">
+      <div className="grid gap-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cn("rounded-2xl border px-3 py-2 text-xs font-semibold tracking-[0.18em]", levelBadgeStyles[hotspot.notifyLevel])}>
+                {levelLabels[hotspot.notifyLevel]}
+              </span>
+              {primarySource ? <MetaTag>{primarySource.sourceLabel}</MetaTag> : null}
+              {hotspot.monitorLabels.slice(0, 2).map((label) => (
+                <MetaTag key={`${hotspot.id}-${label}`}>{label}</MetaTag>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="max-w-5xl text-balance font-display text-[1.95rem] leading-tight tracking-[-0.04em] text-ink-950 md:text-[2.25rem]">
+                {hotspot.title}
+              </h3>
+              <p className="max-w-4xl text-base leading-8 text-stone-600">{hotspot.summary}</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-sm text-stone-500">
+              <MetricPill icon={Eye} label={`相关性 ${hotspot.relevanceScore}%`} />
+              <MetricPill icon={Sparkles} label={`热度 ${hotspot.heatScore}`} />
+              <MetricPill
+                icon={CalendarClock}
+                label={`${hotspot.latestPublishedAt ? "发布时间" : "发现时间"} ${formatDateTime(
+                  hotspot.latestPublishedAt ?? hotspot.firstSeenAt
+                )}`}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm font-medium text-ink-950 transition hover:bg-white"
+            >
+              {expanded ? "收起详情" : "展开详情"}
+              <ChevronDown className={cn("h-4 w-4 transition", expanded && "rotate-180")} />
+            </button>
+
+            <a
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-ink-950 transition hover:border-stone-300 hover:bg-paper-50"
+              href={hotspot.canonicalUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              查看原文
+              <ArrowUpRight className="h-4 w-4" />
+            </a>
+          </div>
+        </div>
+
+        {expanded ? <HotspotDetailPanel hotspot={hotspot} /> : null}
+      </div>
+    </article>
+  );
+}
+
+function HotspotDetailPanel({ hotspot }: { hotspot: HotspotView }) {
+  return (
+    <div className="grid gap-4 border-t border-stone-200 pt-5 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-4">
+        <div className="rounded-[28px] border border-stone-200 bg-paper-50 p-5">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">
+            <Sparkles className="h-4 w-4 text-blue-600" />
+            AI 判断
+          </div>
+          <p className="mt-3 text-sm leading-7 text-stone-700">{hotspot.summary}</p>
+        </div>
+
+        <div className="rounded-[28px] border border-stone-200 bg-paper-50 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">多源证据</p>
+              <p className="mt-1 text-sm text-stone-600">先看来源结构，再决定这条热点要不要立刻做成内容。</p>
+            </div>
+            <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs text-stone-600">
+              {hotspot.evidenceCount} 条证据
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            {hotspot.evidence.map((evidence, index) => (
+              <div key={`${hotspot.id}-${evidence.sourceKey}-${index}`} className="rounded-[22px] border border-stone-200 bg-white p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-ink-950">{evidence.sourceLabel}</p>
+                      <span className="rounded-full border border-stone-200 bg-paper-50 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                        {formatEvidenceFamily(evidence.evidenceFamily)}
+                      </span>
+                      <span className="rounded-full border border-stone-200 bg-paper-50 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                        {evidence.isFreshEvidence ? "Fresh" : evidence.freshnessState}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-stone-500">{evidence.author || "公开来源"}</p>
+                  </div>
+                  <span className="text-xs text-stone-500">质量 {Math.round(evidence.qualityScore)}</span>
+                </div>
+                <p className="mt-3 text-sm leading-7 text-stone-700">{evidence.snippet}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <div className="rounded-[28px] border border-stone-200 bg-paper-50 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">编辑判断</p>
+          <div className="mt-4 grid gap-3">
+            <ScoreRow label="重要程度" value={importanceText(hotspot.notifyLevel)} />
+            <ScoreRow label="相关性" value={`${hotspot.relevanceScore}%`} />
+            <ScoreRow label="热度综合" value={String(hotspot.heatScore)} />
+            <ScoreRow label="可信度" value={`${100 - hotspot.credibilityRisk}%`} />
+            <ScoreRow label="多源确认" value={`${hotspot.sourceDiversityScore}`} />
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-stone-200 bg-paper-50 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">稿件信息</p>
+          <div className="mt-4 grid gap-3 text-sm text-stone-700">
+            <InfoRow label="发布时间" value={formatDateTime(hotspot.latestPublishedAt)} />
+            <InfoRow label="首次发现" value={formatDateTime(hotspot.firstSeenAt)} />
+            <InfoRow label="最近活跃" value={formatDateTime(hotspot.lastSeenAt)} />
+            <InfoRow label="主证据新鲜度" value={hotspot.hasFreshPrimaryEvidence ? "有" : "无"} />
+            <InfoRow label="通知状态" value={hotspot.notified ? "已发送" : "未发送"} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function QuickSelect({
+function SelectionMenu({
   label,
-  value,
-  options,
-  onChange,
-  disabled
+  summary,
+  children
 }: {
   label: string;
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-  disabled: boolean;
+  summary: string;
+  children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-2 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-      <span className="flex items-center gap-2 text-[11px] uppercase tracking-[0.26em] text-slate-400">
-        <CalendarClock className="h-4 w-4 text-cyan-200" />
-        {label}
-      </span>
-      <select
-        className="h-11 rounded-2xl border border-white/10 bg-slate-950/50 px-4 text-sm text-white outline-none transition focus:border-cyan-300/50"
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <details className="group relative">
+      <summary className="flex h-12 cursor-pointer list-none items-center gap-3 rounded-full border border-stone-200 bg-white px-4 text-sm text-ink-950 transition hover:border-stone-300">
+        <Filter className="h-4 w-4 text-stone-400" />
+        <span className="font-medium">{summary}</span>
+        <span className="text-stone-400">{label}</span>
+        <ChevronDown className="ml-auto h-4 w-4 text-stone-400 transition group-open:rotate-180" />
+      </summary>
+      <div className="absolute left-0 top-[calc(100%+0.75rem)] z-20 grid min-w-[17rem] gap-1 rounded-[24px] border border-stone-200 bg-white p-3 shadow-[0_24px_70px_rgba(35,31,27,0.08)]">
+        {children}
+      </div>
+    </details>
   );
 }
 
-function ScorePanel({
-  title,
-  value,
-  tone
+function ToggleRow({
+  active,
+  label,
+  onClick
 }: {
-  title: string;
-  value: number;
-  tone: "amber" | "cyan" | "emerald" | "violet";
+  active: boolean;
+  label: string;
+  onClick: () => void;
 }) {
-  const barTone = {
-    amber: "from-amber-300 via-amber-200 to-white",
-    cyan: "from-cyan-300 via-cyan-200 to-white",
-    emerald: "from-emerald-300 via-emerald-200 to-white",
-    violet: "from-violet-300 via-violet-200 to-white"
-  } as const;
-
   return (
-    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-white">{title}</p>
-        <span className="font-display text-2xl tracking-[-0.03em] text-white">{value}</span>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
-        <div className={`h-full rounded-full bg-gradient-to-r ${barTone[tone]}`} style={{ width: `${Math.max(10, value)}%` }} />
-      </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm transition",
+        active ? "bg-blue-50 text-blue-700" : "text-stone-600 hover:bg-stone-100"
+      )}
+    >
+      <span>{label}</span>
+      <span className={cn("h-2.5 w-2.5 rounded-full", active ? "bg-blue-600" : "bg-stone-300")} />
+    </button>
+  );
+}
+
+function MetaTag({ children }: { children: React.ReactNode }) {
+  return <span className="rounded-full border border-stone-200 bg-paper-50 px-3 py-1 text-xs text-stone-600">{children}</span>;
+}
+
+function MetricPill({
+  icon: Icon,
+  label
+}: {
+  icon: typeof Eye;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-3 py-1.5">
+      <Icon className="h-4 w-4 text-stone-400" />
+      {label}
+    </span>
+  );
+}
+
+function ScoreRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-3">
+      <span className="text-sm text-stone-600">{label}</span>
+      <span className="font-semibold text-ink-950">{value}</span>
     </div>
   );
 }
 
-function importanceToScore(level: NotificationLevel) {
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-stone-200/70 pb-3 last:border-b-0 last:pb-0">
+      <span className="text-stone-500">{label}</span>
+      <span className="text-right font-medium text-ink-950">{value}</span>
+    </div>
+  );
+}
+
+function summarizeOptions(values: string[], labelMap: Map<string, string>) {
+  if (values.length === 1) return labelMap.get(values[0]) ?? values[0];
+  return `已选 ${values.length} 项`;
+}
+
+function formatEvidenceFamily(family: HotspotView["evidence"][number]["evidenceFamily"]) {
+  switch (family) {
+    case "official":
+      return "Official";
+    case "community":
+      return "Community";
+    case "social":
+      return "Social";
+    case "search_discovery":
+    default:
+      return "Search";
+  }
+}
+
+function importanceText(level: NotificationLevel) {
   switch (level) {
     case "high":
-      return 100;
+      return "高优先级";
     case "medium":
-      return 68;
+      return "中优先级";
     case "low":
     default:
-      return 36;
+      return "低优先级";
   }
 }
 
