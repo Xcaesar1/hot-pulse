@@ -1,0 +1,156 @@
+import { describe, expect, it, vi } from "vitest";
+import type { HotspotView } from "@/core/contracts";
+import { applyHotspotListQuery, computeHotspotHeatScore, getDefaultHotspotListQuery, parseHotspotListQuery } from "@/core/hotspot-query";
+
+function makeHotspot(overrides: Partial<HotspotView> = {}): HotspotView {
+  return {
+    id: overrides.id ?? "hot-1",
+    fingerprint: overrides.fingerprint ?? "fp-1",
+    title: overrides.title ?? "Hotspot",
+    canonicalUrl: overrides.canonicalUrl ?? "https://example.com/post",
+    summary: overrides.summary ?? "Summary",
+    notifyLevel: overrides.notifyLevel ?? "medium",
+    relevanceScore: overrides.relevanceScore ?? 70,
+    credibilityRisk: overrides.credibilityRisk ?? 20,
+    noveltyScore: overrides.noveltyScore ?? 55,
+    freshnessScore: overrides.freshnessScore ?? 85,
+    heatScore: overrides.heatScore ?? 0,
+    sourceDiversityScore: overrides.sourceDiversityScore ?? 60,
+    sourceAuthorityScore: overrides.sourceAuthorityScore ?? 70,
+    sourceReliabilityScore: overrides.sourceReliabilityScore ?? 75,
+    velocityScore: overrides.velocityScore ?? 68,
+    finalScore: overrides.finalScore ?? 74,
+    evidenceCount: overrides.evidenceCount ?? 2,
+    firstSeenAt: overrides.firstSeenAt ?? "2026-04-20T10:00:00.000Z",
+    lastSeenAt: overrides.lastSeenAt ?? "2026-04-20T10:30:00.000Z",
+    latestPublishedAt: overrides.latestPublishedAt ?? "2026-04-20T10:15:00.000Z",
+    notified: overrides.notified ?? false,
+    hasFreshPrimaryEvidence: overrides.hasFreshPrimaryEvidence ?? true,
+    candidateState: overrides.candidateState ?? "fresh_hotspot_candidate",
+    monitorLabels: overrides.monitorLabels ?? ["OpenAI"],
+    evidence:
+      overrides.evidence ?? [
+        {
+          sourceKey: "twitter-api",
+          sourceLabel: "Twitter",
+          evidenceFamily: "social",
+          discoverySource: "twitter-api",
+          url: "https://x.com/openai/status/1",
+          title: "Tweet",
+          snippet: "Signal",
+          author: "OpenAI",
+          publishedAt: "2026-04-20T10:15:00.000Z",
+          freshnessState: "fresh",
+          isFreshEvidence: true,
+          weight: 1,
+          qualityScore: 82
+        },
+        {
+          sourceKey: "google-news-rss",
+          sourceLabel: "Google News",
+          evidenceFamily: "search_discovery",
+          discoverySource: "google-news-rss",
+          url: "https://news.example.com/post",
+          title: "News",
+          snippet: "Coverage",
+          author: "Reporter",
+          publishedAt: "2026-04-20T10:10:00.000Z",
+          freshnessState: "fresh",
+          isFreshEvidence: true,
+          weight: 1,
+          qualityScore: 70
+        }
+      ]
+  };
+}
+
+describe("hotspot-query", () => {
+  it("applies dashboard defaults when parsing empty search params", () => {
+    expect(parseHotspotListQuery(new URLSearchParams())).toEqual(getDefaultHotspotListQuery());
+  });
+
+  it("filters by source, level, monitor, and time range", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T12:00:00.000Z"));
+    const hotspots = [
+      makeHotspot({ id: "match", notifyLevel: "high", monitorLabels: ["OpenAI"] }),
+      makeHotspot({
+        id: "old",
+        firstSeenAt: "2026-04-18T12:00:00.000Z",
+        latestPublishedAt: "2026-04-18T12:00:00.000Z",
+        notifyLevel: "high",
+        monitorLabels: ["Anthropic"]
+      })
+    ];
+
+    const result = applyHotspotListQuery(
+      hotspots,
+      {
+        sources: ["twitter-api"],
+        levels: ["high"],
+        monitors: ["OpenAI"],
+        timeRange: "24h"
+      },
+      "all"
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("match");
+    vi.useRealTimers();
+  });
+
+  it("sorts by importance before final score", () => {
+    const result = applyHotspotListQuery(
+      [
+        makeHotspot({ id: "medium", notifyLevel: "medium", finalScore: 99 }),
+        makeHotspot({ id: "high", notifyLevel: "high", finalScore: 40 })
+      ],
+      { sort: "importance", levels: [] },
+      "all"
+    );
+
+    expect(result.map((item) => item.id)).toEqual(["high", "medium"]);
+  });
+
+  it("sorts by published time with missing dates at the end", () => {
+    const result = applyHotspotListQuery(
+      [
+        makeHotspot({ id: "no-date", latestPublishedAt: null }),
+        makeHotspot({ id: "newest", latestPublishedAt: "2026-04-20T12:00:00.000Z" }),
+        makeHotspot({ id: "older", latestPublishedAt: "2026-04-20T11:00:00.000Z" })
+      ],
+      { sort: "published", levels: [] },
+      "all"
+    );
+
+    expect(result.map((item) => item.id)).toEqual(["newest", "older", "no-date"]);
+  });
+
+  it("computes a unified heat score across mixed evidence", () => {
+    const score = computeHotspotHeatScore(
+      makeHotspot({
+        evidenceCount: 4,
+        velocityScore: 88,
+        sourceDiversityScore: 72,
+        sourceReliabilityScore: 74,
+        sourceAuthorityScore: 66
+      })
+    );
+
+    expect(score).toBeGreaterThan(60);
+  });
+
+  it("falls back to defaults for invalid query values", () => {
+    const result = parseHotspotListQuery(
+      new URLSearchParams({
+        sort: "wrong",
+        timeRange: "bad",
+        levels: "high,invalid"
+      })
+    );
+
+    expect(result.sort).toBe("importance");
+    expect(result.timeRange).toBe("24h");
+    expect(result.levels).toEqual(["high"]);
+  });
+});

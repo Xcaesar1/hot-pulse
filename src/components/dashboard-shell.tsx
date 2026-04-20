@@ -7,19 +7,18 @@ import {
   Bell,
   Bolt,
   Clock3,
-  ExternalLink,
   Mail,
   Radar,
   RefreshCw,
   Search,
   Settings2,
-  ShieldCheck,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
-  TrendingUp,
-  Waypoints
+  TrendingUp
 } from "lucide-react";
-import type { DashboardData, NotificationLevel, SourceRecord } from "@/core/contracts";
+import type { DashboardData, HotspotListQuery, NotificationLevel, SourceRecord } from "@/core/contracts";
+import { HotspotBoard } from "@/components/hotspot-board";
 import { BackgroundBeams } from "@/components/ui/aceternity/background-beams";
 import { CardSpotlight } from "@/components/ui/aceternity/card-spotlight";
 import { Spotlight } from "@/components/ui/aceternity/spotlight";
@@ -34,7 +33,7 @@ const sourceKinds: Record<SourceRecord["kind"], string> = {
   search: "网页搜索",
   social: "社交来源",
   structured: "结构化来源",
-  custom: "自定义"
+  custom: "自定义来源"
 };
 
 const statusStyles: Record<SourceRecord["lastStatus"], string> = {
@@ -43,7 +42,13 @@ const statusStyles: Record<SourceRecord["lastStatus"], string> = {
   error: "border-red-300/30 bg-red-300/12 text-red-100"
 };
 
-export function DashboardShell({ initialData }: { initialData: DashboardData }) {
+export function DashboardShell({
+  initialData,
+  hotspotQuery
+}: {
+  initialData: DashboardData;
+  hotspotQuery: HotspotListQuery;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [monitorForm, setMonitorForm] = useState({
@@ -128,6 +133,7 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
           <BackgroundBeams className="opacity-90" />
           <Spotlight />
           <div className="radar-grid absolute inset-0 opacity-60" />
+
           <div className="relative z-10 grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
             <CardSpotlight className="min-h-[28rem] p-6 md:p-8">
               <div className="flex h-full flex-col justify-between gap-8">
@@ -144,22 +150,14 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                   </div>
 
                   <div className="max-w-4xl space-y-4">
-                    <h1 className="font-display text-4xl leading-none tracking-[-0.05em] text-white md:text-6xl xl:text-7xl">
-                      Hot Pulse
-                    </h1>
+                    <h1 className="font-display text-4xl leading-none tracking-[-0.05em] text-white md:text-6xl xl:text-7xl">Hot Pulse</h1>
                     <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                      为 AI 创作者打造的热点指挥台。我们把网页搜索、X、社区与官方来源压缩进同一条情报流，让你更快判断什么值得立刻追、立刻写、立刻分享。
+                      一个为 AI 创作者打造的热点指挥台。我们把 X、搜索、社区与官方信号压缩进一条情报流，让你更快判断什么值得立刻追、立刻写、立刻发。
                     </p>
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-4">
-                    <SignalMetric
-                      icon={Bolt}
-                      label="高优先级热点"
-                      value={String(metrics.highCount)}
-                      hint="需要优先判断是否马上发文"
-                      tone="amber"
-                    />
+                    <SignalMetric icon={Bolt} label="高优先级热点" value={String(metrics.highCount)} hint="适合优先判断是否立即开写" tone="amber" />
                     <SignalMetric
                       icon={ShieldCheck}
                       label="来源健康"
@@ -167,13 +165,7 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                       hint="当前可用采集源"
                       tone="cyan"
                     />
-                    <SignalMetric
-                      icon={Search}
-                      label="监控规则"
-                      value={String(metrics.totalMonitors)}
-                      hint="关键词与主题并行追踪"
-                      tone="emerald"
-                    />
+                    <SignalMetric icon={Search} label="监控规则" value={String(metrics.totalMonitors)} hint="关键词与主题并行追踪" tone="emerald" />
                     <SignalMetric
                       icon={TrendingUp}
                       label="平均可信"
@@ -189,12 +181,12 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                     <p className="text-xs uppercase tracking-[0.28em] text-slate-400">建议动作</p>
                     <div className="space-y-1">
                       <p className="text-lg font-semibold text-white">
-                        {metrics.breaking ? `优先处理：${metrics.breaking.title}` : "先执行一次扫描，开始建立你的内容雷达。"}
+                        {metrics.breaking ? `优先处理：${metrics.breaking.title}` : "先执行一次扫描，开始建立你的热点雷达。"}
                       </p>
                       <p className="max-w-2xl text-sm text-slate-300">
                         {metrics.breaking
                           ? `它当前拥有 ${metrics.breaking.evidenceCount} 条证据，综合分 ${metrics.breaking.finalScore}，适合先看证据再决定是否对外分享。`
-                          : "系统会把多源重复出现的内容自动聚合，避免你在多个信息流之间来回切换。"}
+                          : "系统会自动聚合多源重复出现的内容，避免你在多个信息流之间来回切换。"}
                       </p>
                     </div>
                   </div>
@@ -203,7 +195,7 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                     <ActionButton icon={RefreshCw} loading={pending} onClick={() => runMutation(triggerScan)}>
                       立即扫描
                     </ActionButton>
-                    <ActionButton icon={Mail} loading={pending} variant="secondary" onClick={() => runMutation(triggerTestEmail)}>
+                    <ActionButton icon={Mail} loading={pending} onClick={() => runMutation(triggerTestEmail)} variant="secondary">
                       发送测试通知
                     </ActionButton>
                   </div>
@@ -213,28 +205,11 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
 
             <div className="grid gap-4">
               <CardSpotlight className="p-5">
-                <SectionHeader
-                  title="作战状态"
-                  subtitle="关键能力是否已经就绪"
-                  icon={Activity}
-                  compact
-                />
+                <SectionHeader title="作战状态" subtitle="关键能力是否已经就绪" icon={Activity} compact />
                 <div className="mt-5 grid gap-3">
-                  <ReadinessRow
-                    label="OpenRouter 分析"
-                    value={initialData.env.hasOpenRouter ? "已连接" : "缺少密钥"}
-                    active={initialData.env.hasOpenRouter}
-                  />
-                  <ReadinessRow
-                    label="twitterapi.io"
-                    value={initialData.env.hasTwitterApi ? "已连接" : "缺少密钥"}
-                    active={initialData.env.hasTwitterApi}
-                  />
-                  <ReadinessRow
-                    label="邮件提醒"
-                    value={initialData.env.hasEmail ? "可发信" : "未配置"}
-                    active={initialData.env.hasEmail}
-                  />
+                  <ReadinessRow label="OpenRouter 分析" value={initialData.env.hasOpenRouter ? "已连接" : "缺少密钥"} active={initialData.env.hasOpenRouter} />
+                  <ReadinessRow label="twitterapi.io" value={initialData.env.hasTwitterApi ? "已连接" : "缺少密钥"} active={initialData.env.hasTwitterApi} />
+                  <ReadinessRow label="邮件提醒" value={initialData.env.hasEmail ? "可发送" : "未配置"} active={initialData.env.hasEmail} />
                 </div>
               </CardSpotlight>
 
@@ -243,22 +218,22 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                 <div className="mt-5 grid gap-3">
                   <InputField
                     label="规则名称"
-                    value={monitorForm.label}
                     onChange={(value) => setMonitorForm((state) => ({ ...state, label: value }))}
                     placeholder="例如：OpenAI 新模型"
+                    value={monitorForm.label}
                   />
                   <InputField
                     label="监控查询"
-                    value={monitorForm.query}
                     onChange={(value) => setMonitorForm((state) => ({ ...state, query: value }))}
                     placeholder="例如：OpenAI release OR new model"
+                    value={monitorForm.query}
                   />
                   <label className="grid gap-2">
                     <span className="text-[11px] uppercase tracking-[0.26em] text-slate-400">监控模式</span>
                     <select
                       className="h-12 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none transition focus:border-cyan-300/50"
-                      value={monitorForm.mode}
                       onChange={(event) => setMonitorForm((state) => ({ ...state, mode: event.target.value }))}
+                      value={monitorForm.mode}
                     >
                       <option value="keyword">关键词</option>
                       <option value="topic">主题</option>
@@ -268,9 +243,9 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                     <span className="text-[11px] uppercase tracking-[0.26em] text-slate-400">别名 / 同义写法</span>
                     <textarea
                       className="min-h-24 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
-                      value={monitorForm.aliases}
                       onChange={(event) => setMonitorForm((state) => ({ ...state, aliases: event.target.value }))}
                       placeholder="例如：GPT-5.4, GPT 5.4, OpenAI GPT"
+                      value={monitorForm.aliases}
                     />
                   </label>
                   <button
@@ -292,111 +267,7 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.28fr_0.72fr]">
-          <div className="grid gap-5">
-            <SectionHeader
-              title="实时热点流"
-              subtitle="先看最值得判断的，再展开多源证据"
-              icon={Waypoints}
-            />
-            <div className="grid gap-4">
-              {initialData.hotspots.length === 0 ? (
-                <EmptyPanel
-                  title="热点流还没有内容"
-                  description="先执行一次立即扫描，或等待下一次 30 分钟定时巡检。系统会在候选内容完成聚合和评分后自动刷新这里。"
-                />
-              ) : (
-                initialData.hotspots.map((hotspot, index) => (
-                  <CardSpotlight key={hotspot.id} className="p-5 md:p-6" color={index === 0 ? "rgba(245, 158, 11, 0.15)" : undefined}>
-                    <div className="grid gap-5">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="max-w-4xl space-y-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] ${levelStyles[hotspot.notifyLevel]}`}>
-                              {hotspot.notifyLevel}
-                            </span>
-                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
-                              {hotspot.evidenceCount} 条证据
-                            </span>
-                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
-                              首次发现 {formatDateTime(hotspot.firstSeenAt)}
-                            </span>
-                            {hotspot.notified ? (
-                              <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100">
-                                已推送
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <div className="space-y-3">
-                            <h2 className="max-w-4xl font-display text-2xl leading-tight tracking-[-0.03em] text-white md:text-[2rem]">
-                              {hotspot.title}
-                            </h2>
-                            <p className="max-w-3xl text-sm leading-7 text-slate-300">{hotspot.summary}</p>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            {hotspot.monitorLabels.map((label) => (
-                              <span key={`${hotspot.id}-${label}`} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
-                                {label}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        <a
-                          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2.5 text-sm font-medium text-white transition hover:border-cyan-300/40 hover:bg-cyan-300/10"
-                          href={hotspot.canonicalUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          查看原文
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </div>
-
-                      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                        <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">多源证据</p>
-                              <p className="mt-1 text-sm text-slate-300">先验证来源，再决定是否外发</p>
-                            </div>
-                            <span className="text-xs text-slate-400">最近更新 {formatDateTime(hotspot.lastSeenAt)}</span>
-                          </div>
-                          <div className="mt-4 grid gap-3">
-                            {hotspot.evidence.map((evidence, evidenceIndex) => (
-                              <div
-                                key={`${hotspot.id}-${evidence.sourceKey}-${evidenceIndex}`}
-                                className="rounded-[20px] border border-white/8 bg-slate-950/45 px-4 py-3"
-                              >
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                  <div className="space-y-1">
-                                    <p className="text-sm font-semibold text-white">{evidence.sourceLabel}</p>
-                                    <p className="text-xs text-slate-400">{evidence.author || "匿名来源"}</p>
-                                  </div>
-                                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">
-                                    权重 {Math.round(evidence.weight)}
-                                  </span>
-                                </div>
-                                <p className="mt-3 text-sm leading-6 text-slate-300">{evidence.snippet}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="grid gap-3">
-                          <ScorePanel title="综合热度" value={hotspot.finalScore} tone="amber" />
-                          <ScorePanel title="相关性" value={hotspot.relevanceScore} tone="cyan" />
-                          <ScorePanel title="可信度" value={100 - hotspot.credibilityRisk} tone="emerald" />
-                          <ScorePanel title="来源多样性" value={hotspot.sourceDiversityScore} tone="violet" />
-                        </div>
-                      </div>
-                    </div>
-                  </CardSpotlight>
-                ))
-              )}
-            </div>
-          </div>
+          <HotspotBoard hotspots={initialData.hotspots} monitors={initialData.monitors} query={hotspotQuery} sources={initialData.sources} />
 
           <div className="grid gap-5">
             <SectionHeader title="通知与运行" subtitle="盯住输出节奏，避免漏掉最佳发布窗口" icon={Bell} />
@@ -406,9 +277,9 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
               <div className="mt-4 grid gap-3">
                 {initialData.notifications.length === 0 ? (
                   <EmptyPanel
-                    title="还没有通知记录"
-                    description="一旦高优先级热点满足推送条件，系统会先写入站内收件箱，再按配置发送邮件。"
                     compact
+                    description="一旦高优先级热点满足推送条件，系统会先写入站内收件箱，再按配置发送邮件。"
+                    title="还没有通知记录"
                   />
                 ) : (
                   initialData.notifications.slice(0, 8).map((item) => (
@@ -433,11 +304,7 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
               <SectionHeader title="运行时间线" subtitle="最近的扫描执行情况" icon={Clock3} compact />
               <div className="mt-5 space-y-4">
                 {initialData.recentRuns.length === 0 ? (
-                  <EmptyPanel
-                    title="还没有运行记录"
-                    description="点击“立即扫描”后，这里会出现最近一次任务的状态、候选数和通知数。"
-                    compact
-                  />
+                  <EmptyPanel compact description="点击“立即扫描”后，这里会出现最近一次任务的状态、候选数和通知数。" title="还没有运行记录" />
                 ) : (
                   initialData.recentRuns.map((run) => (
                     <div key={run.id} className="relative pl-6">
@@ -447,11 +314,9 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex items-center gap-2 text-sm font-semibold text-white">
                             <ShieldAlert className="h-4 w-4 text-amber-200" />
-                            {run.trigger === "api" ? "手动触发" : run.trigger === "scheduled" ? "定时任务" : "系统任务"}
+                            {run.trigger === "api" ? "API 触发" : run.trigger === "scheduled" ? "定时任务" : "手动触发"}
                           </div>
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">
-                            {run.status}
-                          </span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">{run.status}</span>
                         </div>
                         <p className="mt-3 text-sm text-slate-300">
                           候选 {run.summary.candidates} / 热点 {run.summary.hotspots} / 通知 {run.summary.notifications}
@@ -475,12 +340,8 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-display text-xl text-white">{source.label}</h3>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles[source.lastStatus]}`}>
-                        {source.lastStatus}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">
-                        {sourceKinds[source.kind]}
-                      </span>
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles[source.lastStatus]}`}>{source.lastStatus}</span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-300">{sourceKinds[source.kind]}</span>
                     </div>
                     <p className="text-sm text-slate-400">{source.key}</p>
                     {source.errorMessage ? <p className="text-sm text-red-200">{source.errorMessage}</p> : null}
@@ -500,14 +361,12 @@ export function DashboardShell({ initialData }: { initialData: DashboardData }) 
 
                 <div className="mt-5 grid gap-3">
                   <details className="group rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
-                    <summary className="cursor-pointer list-none text-sm font-medium text-white">
-                      查看与编辑 JSON 配置
-                    </summary>
-                    <p className="mt-2 text-xs leading-6 text-slate-400">这里保留高级配置入口，避免平时操作被大段 JSON 打断。</p>
+                    <summary className="cursor-pointer list-none text-sm font-medium text-white">查看与编辑 JSON 配置</summary>
+                    <p className="mt-2 text-xs leading-6 text-slate-400">这里保留高级配置入口，避免日常操作被大段 JSON 打断。</p>
                     <textarea
                       className="mt-4 min-h-40 w-full rounded-[18px] border border-white/10 bg-slate-950/60 px-4 py-3 font-mono text-xs leading-6 text-slate-100 outline-none transition focus:border-cyan-300/50"
-                      value={sourceDrafts[source.id] || ""}
                       onChange={(event) => setSourceDrafts((drafts) => ({ ...drafts, [source.id]: event.target.value }))}
+                      value={sourceDrafts[source.id] || ""}
                     />
                   </details>
 
@@ -626,35 +485,6 @@ function ReadinessRow({ label, value, active }: { label: string; value: string; 
   );
 }
 
-function ScorePanel({
-  title,
-  value,
-  tone
-}: {
-  title: string;
-  value: number;
-  tone: "amber" | "cyan" | "emerald" | "violet";
-}) {
-  const barTone = {
-    amber: "from-amber-300 via-amber-200 to-white",
-    cyan: "from-cyan-300 via-cyan-200 to-white",
-    emerald: "from-emerald-300 via-emerald-200 to-white",
-    violet: "from-violet-300 via-violet-200 to-white"
-  } as const;
-
-  return (
-    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-white">{title}</p>
-        <span className="font-display text-2xl tracking-[-0.03em] text-white">{value}</span>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
-        <div className={`h-full rounded-full bg-gradient-to-r ${barTone[tone]}`} style={{ width: `${Math.max(10, value)}%` }} />
-      </div>
-    </div>
-  );
-}
-
 function InputField({
   label,
   value,
@@ -671,9 +501,9 @@ function InputField({
       <span className="text-[11px] uppercase tracking-[0.26em] text-slate-400">{label}</span>
       <input
         className="h-12 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/50"
-        value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        value={value}
       />
     </label>
   );
@@ -693,9 +523,7 @@ function EmptyPanel({ title, description, compact = false }: { title: string; de
 }
 
 function formatDateTime(input: string | null) {
-  if (!input) {
-    return "暂无";
-  }
+  if (!input) return "暂无";
 
   return new Intl.DateTimeFormat("zh-CN", {
     month: "2-digit",

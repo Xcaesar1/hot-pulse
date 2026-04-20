@@ -6,6 +6,8 @@ export type ScanTrigger = "manual" | "scheduled" | "api";
 export type EvidenceFamily = "search_discovery" | "social" | "community" | "official";
 export type FreshnessState = "fresh" | "stale" | "unknown";
 export type HotspotCandidateState = "fresh_hotspot_candidate" | "stale_or_unknown_date_candidate";
+export type HotspotSort = "heat" | "relevance" | "published" | "discovered" | "importance";
+export type HotspotTimeRange = "1h" | "6h" | "24h" | "7d" | "all";
 
 export interface MonitorRecord {
   id: string;
@@ -87,6 +89,7 @@ export interface HotspotView {
   credibilityRisk: number;
   noveltyScore: number;
   freshnessScore: number;
+  heatScore: number;
   sourceDiversityScore: number;
   sourceAuthorityScore: number;
   sourceReliabilityScore: number;
@@ -95,11 +98,20 @@ export interface HotspotView {
   evidenceCount: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  latestPublishedAt: string | null;
   notified: boolean;
   hasFreshPrimaryEvidence: boolean;
   candidateState: HotspotCandidateState;
   monitorLabels: string[];
   evidence: HotspotEvidenceRecord[];
+}
+
+export interface HotspotListQuery {
+  sort: HotspotSort;
+  sources: string[];
+  levels: NotificationLevel[];
+  monitors: string[];
+  timeRange: HotspotTimeRange;
 }
 
 export interface NotificationView {

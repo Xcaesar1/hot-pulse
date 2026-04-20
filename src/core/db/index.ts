@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type {
   DashboardData,
   FreshnessState,
+  HotspotListQuery,
   HotspotEvidenceRecord,
   HotspotView,
   MonitorRecord,
@@ -13,6 +14,7 @@ import type {
 } from "@/core/contracts";
 import { getEnvFlags } from "@/core/config";
 import { evaluateFreshness } from "@/core/freshness";
+import { applyHotspotListQuery, computeHotspotHeatScore, getLatestPublishedAt } from "@/core/hotspot-query";
 import { ensureBootstrap, getDbBundle } from "@/core/db/client";
 import { bootstrapDatabase } from "@/core/db/bootstrap";
 import { candidateDocuments, hotspotEvidences, hotspots, monitors, notifications, scanRuns, sources } from "@/core/db/schema";
@@ -289,14 +291,36 @@ export async function insertEvidence(hotspotId: string, candidateId: string, evi
     .onConflictDoNothing();
 }
 
-export async function listHotspots(): Promise<HotspotView[]> {
+export async function listHotspots(query?: Partial<HotspotListQuery>, mode: "dashboard" | "all" = "all"): Promise<HotspotView[]> {
   const db = await ready();
-  const hotspotRows = await db.select().from(hotspots).orderBy(desc(hotspots.finalScore), desc(hotspots.lastSeenAt)).limit(50);
+  const hotspotRows = await db.select().from(hotspots).orderBy(desc(hotspots.lastSeenAt));
   const evidenceRows = await db.select().from(hotspotEvidences);
 
-  return hotspotRows.map((row) => {
+  const mappedRows = hotspotRows.map((row) => {
     const metadata = safeJsonParse<Record<string, unknown>>(row.metadata, {});
-    return {
+    const mappedEvidence = evidenceRows
+      .filter((item) => item.hotspotId === row.id)
+      .map((item) => {
+        const freshness = evaluateFreshness(item.publishedAt);
+        return {
+          sourceKey: item.sourceKey,
+          sourceLabel: normalizeText(item.sourceLabel),
+          evidenceFamily: item.evidenceFamily as HotspotEvidenceRecord["evidenceFamily"],
+          discoverySource: normalizeText(item.discoverySource),
+          url: item.url,
+          title: normalizeText(item.title),
+          snippet: normalizeText(item.snippet),
+          author: item.author ? normalizeText(item.author) : null,
+          publishedAt: item.publishedAt,
+          freshnessState: freshness.freshnessState as FreshnessState,
+          isFreshEvidence: freshness.isFresh,
+          weight: item.weight,
+          qualityScore: item.qualityScore
+        };
+      });
+
+    const latestPublishedAt = getLatestPublishedAt({ evidence: mappedEvidence });
+    const hotspot: HotspotView = {
       id: row.id,
       fingerprint: row.fingerprint,
       title: normalizeText(row.title),
@@ -307,6 +331,7 @@ export async function listHotspots(): Promise<HotspotView[]> {
       credibilityRisk: row.credibilityRisk,
       noveltyScore: row.noveltyScore,
       freshnessScore: Number(metadata.freshnessScore ?? 0),
+      heatScore: 0,
       sourceDiversityScore: row.sourceDiversityScore,
       sourceAuthorityScore: row.sourceAuthorityScore,
       sourceReliabilityScore: row.sourceReliabilityScore,
@@ -315,32 +340,21 @@ export async function listHotspots(): Promise<HotspotView[]> {
       evidenceCount: row.evidenceCount,
       firstSeenAt: row.firstSeenAt,
       lastSeenAt: row.lastSeenAt,
+      latestPublishedAt,
       notified: row.notified,
       hasFreshPrimaryEvidence: Boolean(metadata.hasFreshPrimaryEvidence ?? false),
       candidateState: (metadata.candidateState as HotspotView["candidateState"] | undefined) ?? "stale_or_unknown_date_candidate",
       monitorLabels: safeJsonParse<string[]>(row.monitorLabels, []).map((item) => normalizeText(item)),
-      evidence: evidenceRows
-        .filter((item) => item.hotspotId === row.id)
-        .map((item) => {
-          const freshness = evaluateFreshness(item.publishedAt);
-          return {
-            sourceKey: item.sourceKey,
-            sourceLabel: normalizeText(item.sourceLabel),
-            evidenceFamily: item.evidenceFamily as HotspotEvidenceRecord["evidenceFamily"],
-            discoverySource: normalizeText(item.discoverySource),
-            url: item.url,
-            title: normalizeText(item.title),
-            snippet: normalizeText(item.snippet),
-            author: item.author ? normalizeText(item.author) : null,
-            publishedAt: item.publishedAt,
-            freshnessState: freshness.freshnessState as FreshnessState,
-            isFreshEvidence: freshness.isFresh,
-            weight: item.weight,
-            qualityScore: item.qualityScore
-          };
-        })
+      evidence: mappedEvidence
+    };
+
+    return {
+      ...hotspot,
+      heatScore: computeHotspotHeatScore(hotspot)
     };
   });
+
+  return applyHotspotListQuery(mappedRows, query, mode);
 }
 
 export async function createNotification(payload: Omit<NotificationView, "id" | "createdAt">) {
@@ -426,11 +440,11 @@ export async function getSourceByKey(key: string) {
   return rows[0] ? mapSource(rows[0]) : null;
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+export async function getDashboardData(hotspotQuery?: Partial<HotspotListQuery>): Promise<DashboardData> {
   const [monitorRows, sourceRows, hotspotRows, notificationRows, recentRuns] = await Promise.all([
     listMonitors(),
     listSources(),
-    listHotspots(),
+    listHotspots(hotspotQuery, "dashboard"),
     listNotifications(),
     listRecentRuns()
   ]);
