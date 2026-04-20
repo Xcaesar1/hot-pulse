@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heuristicAnalysis, parseAnalysisPayload } from "@/core/ai/openrouter";
+import { heuristicAnalysis, parseAnalysisPayload, shouldTranslateAnalysis } from "@/core/ai/openrouter";
 
 describe("openrouter analysis helpers", () => {
   it("parses structured JSON payloads", () => {
@@ -31,6 +31,7 @@ describe("openrouter analysis helpers", () => {
     expect(result.isRelevant).toBe(true);
     expect(result.relevanceScore).toBeGreaterThan(50);
     expect(result.credibilityReasoning.length).toBeGreaterThan(0);
+    expect(result.reasoning).toContain("启发式兜底");
   });
 
   it("keeps fallback scoring shape stable", () => {
@@ -42,5 +43,23 @@ describe("openrouter analysis helpers", () => {
 
     expect(result.credibilityRisk).toBe(28);
     expect(["high", "medium", "low"]).toContain(result.suggestedNotify);
+  });
+
+  it("marks english analysis text for chinese translation", () => {
+    expect(
+      shouldTranslateAnalysis({
+        summary: "New model release confirmed.",
+        reasoning: "Appears in multiple official sources.",
+        credibilityReasoning: "Official sources align and no contradiction appears."
+      })
+    ).toBe(true);
+
+    expect(
+      shouldTranslateAnalysis({
+        summary: "新模型发布已确认。",
+        reasoning: "它同时出现在多个官方来源中。",
+        credibilityReasoning: "多个来源之间没有明显冲突。"
+      })
+    ).toBe(false);
   });
 });

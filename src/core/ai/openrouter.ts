@@ -2,10 +2,72 @@ import { getConfig } from "@/core/config";
 import type { AIAnalysisResult, NotificationLevel } from "@/core/contracts";
 import { clamp, truncate } from "@/core/utils";
 
+const chinesePattern = /[\u3400-\u9fff]/;
+
 function heuristicNotifyLevel(relevanceScore: number, credibilityRisk: number): NotificationLevel {
   if (relevanceScore >= 75 && credibilityRisk <= 40) return "high";
   if (relevanceScore >= 55) return "medium";
   return "low";
+}
+
+function hasChineseText(input: string) {
+  return chinesePattern.test(input);
+}
+
+function shouldTranslateAnalysis(result: Pick<AIAnalysisResult, "summary" | "reasoning" | "credibilityReasoning">) {
+  return !hasChineseText(result.summary) || !hasChineseText(result.reasoning) || !hasChineseText(result.credibilityReasoning);
+}
+
+async function requestOpenRouterJson(args: {
+  prompt: string;
+  systemPrompt: string;
+  timeoutMs?: number;
+}) {
+  const config = getConfig();
+  const response = await fetch(`${config.openRouterBaseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.openRouterApiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": config.openRouterSiteUrl,
+      "X-Title": config.openRouterSiteName
+    },
+    body: JSON.stringify({
+      model: config.openRouterModel,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content: args.systemPrompt
+        },
+        {
+          role: "user",
+          content: args.prompt
+        }
+      ]
+    }),
+    signal: AbortSignal.timeout(args.timeoutMs ?? 25000)
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`HTTP ${response.status}: ${truncate(errorBody, 180)}`);
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+
+  const rawContent = payload.choices?.[0]?.message?.content;
+  if (!rawContent) {
+    throw new Error("OpenRouter returned no message content");
+  }
+
+  return rawContent;
 }
 
 export function parseAnalysisPayload(raw: string): AIAnalysisResult {
@@ -43,11 +105,11 @@ export function heuristicAnalysis(input: { query: string; title: string; body: s
     credibilityRisk,
     noveltyScore,
     summary: truncate(input.body || input.title, 220),
-    reasoning: `Heuristic fallback matched ${hits}/${keywords.length || 1} query terms.`,
+    reasoning: `启发式兜底判断命中了 ${hits}/${keywords.length || 1} 个查询词。`,
     credibilityReasoning:
       credibilityRisk >= 50
-        ? "Heuristic fallback detected rumor-like or unconfirmed language and reduced trust."
-        : "Heuristic fallback found no strong rumor markers in the available text.",
+        ? "启发式兜底检测到疑似传闻或未确认表述，因此下调了可信度。"
+        : "启发式兜底没有在可用文本里发现明显的传闻型风险词。",
     suggestedNotify: heuristicNotifyLevel(relevanceScore, credibilityRisk)
   };
 }
@@ -59,8 +121,48 @@ function heuristicWithReason(
   const fallback = heuristicAnalysis(input);
   return {
     ...fallback,
-    reasoning: truncate(`Fallback analysis used because OpenRouter was unavailable: ${reason}`, 260),
-    credibilityReasoning: truncate(`Credibility analysis also fell back because OpenRouter was unavailable: ${reason}`, 260)
+    reasoning: truncate(`由于 OpenRouter 当前不可用，本次改为启发式兜底分析：${reason}`, 260),
+    credibilityReasoning: truncate(`由于 OpenRouter 当前不可用，真实性判断也改为启发式兜底：${reason}`, 260)
+  };
+}
+
+async function translateAnalysisToChinese(result: AIAnalysisResult): Promise<AIAnalysisResult> {
+  const prompt = `
+Return a JSON object only.
+Translate the following fields into concise Simplified Chinese. Keep the meaning accurate and do not add new facts.
+
+{
+  "summary": ${JSON.stringify(result.summary)},
+  "reasoning": ${JSON.stringify(result.reasoning)},
+  "credibilityReasoning": ${JSON.stringify(result.credibilityReasoning)}
+}
+
+Required JSON shape:
+{
+  "summary": string,
+  "reasoning": string,
+  "credibilityReasoning": string
+}
+`.trim();
+
+  const rawContent = await requestOpenRouterJson({
+    systemPrompt: "You are a precise translator. Always translate into concise Simplified Chinese and return JSON only.",
+    prompt,
+    timeoutMs: 20000
+  });
+
+  const first = rawContent.indexOf("{");
+  const last = rawContent.lastIndexOf("}");
+  if (first === -1 || last === -1 || last <= first) {
+    throw new Error("Translation response did not contain a JSON object");
+  }
+
+  const parsed = JSON.parse(rawContent.slice(first, last + 1)) as Partial<Pick<AIAnalysisResult, "summary" | "reasoning" | "credibilityReasoning">>;
+  return {
+    ...result,
+    summary: truncate(String(parsed.summary ?? result.summary), 320),
+    reasoning: truncate(String(parsed.reasoning ?? result.reasoning), 260),
+    credibilityReasoning: truncate(String(parsed.credibilityReasoning ?? result.credibilityReasoning), 260)
   };
 }
 
@@ -79,6 +181,7 @@ export async function analyzeCandidate(input: {
   const prompt = `
 Return a JSON object only.
 You are verifying whether a candidate document is a meaningful emerging hotspot for a monitor query.
+All explanation fields must be written in concise Simplified Chinese.
 
 Monitor query: ${input.query}
 Source: ${input.sourceLabel}
@@ -103,74 +206,35 @@ Scoring rules:
 - relevanceScore: 0-100
 - credibilityRisk: 0-100, lower is more trustworthy
 - noveltyScore: 0-100
+- summary, reasoning, credibilityReasoning: concise Simplified Chinese
 `.trim();
 
-  let response: Response;
   try {
-    response = await fetch(`${config.openRouterBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": config.openRouterSiteUrl,
-        "X-Title": config.openRouterSiteName
-      },
-      body: JSON.stringify({
-        model: config.openRouterModel,
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content: "You evaluate hot topic signals. Always respond with a JSON object only."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
-      }),
-      signal: AbortSignal.timeout(25000)
+    const rawContent = await requestOpenRouterJson({
+      systemPrompt: "You evaluate hot topic signals. Always respond with a JSON object only. Write summary and explanations in concise Simplified Chinese.",
+      prompt
     });
+    const parsed = parseAnalysisPayload(rawContent);
+
+    if (!shouldTranslateAnalysis(parsed)) {
+      return parsed;
+    }
+
+    try {
+      return await translateAnalysisToChinese(parsed);
+    } catch (translationError) {
+      console.error("[openrouter] translation fallback failed", {
+        model: config.openRouterModel,
+        reason: translationError instanceof Error ? translationError.message : "Unknown translation failure",
+        url: input.url
+      });
+      return parsed;
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Network request failed";
     console.error("[openrouter] request failed", { reason, model: config.openRouterModel, url: input.url });
     return heuristicWithReason(input, reason);
   }
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error("[openrouter] non-200 response", {
-      status: response.status,
-      model: config.openRouterModel,
-      body: truncate(errorBody, 400),
-      url: input.url
-    });
-    return heuristicWithReason(input, `HTTP ${response.status}: ${truncate(errorBody, 140)}`);
-  }
-
-  const payload = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
-  };
-
-  const rawContent = payload.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    return heuristicWithReason(input, "OpenRouter returned no message content");
-  }
-
-  try {
-    return parseAnalysisPayload(rawContent);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "Could not parse AI JSON";
-    console.error("[openrouter] invalid JSON payload", {
-      model: config.openRouterModel,
-      reason,
-      rawContent: truncate(rawContent, 400),
-      url: input.url
-    });
-    return heuristicWithReason(input, reason);
-  }
 }
+
+export { shouldTranslateAnalysis };
