@@ -39,25 +39,42 @@ function isOriginalTweet(tweet: TwitterApiTweet, allowReplies: boolean) {
   return true;
 }
 
-function hasEnoughEngagement(tweet: TwitterApiTweet, minLikes: number, minRetweets: number) {
-  return (tweet.likeCount ?? 0) >= minLikes && (tweet.retweetCount ?? 0) >= minRetweets;
+function hasEnoughEngagement(tweet: TwitterApiTweet, minLikes: number, minRetweets: number, minViews: number) {
+  return (tweet.likeCount ?? 0) >= minLikes && (tweet.retweetCount ?? 0) >= minRetweets && (tweet.viewCount ?? 0) >= minViews;
+}
+
+function hasEnoughAuthorSignals(tweet: TwitterApiTweet, minFollowers: number) {
+  return Number(tweet.author?.followers ?? 0) >= minFollowers;
 }
 
 function computeTweetQuality(tweet: TwitterApiTweet, trustedAccounts: string[]) {
   const isTrustedAccount = trustedAccounts.some((item) => item.toLowerCase() === (tweet.author?.userName || "").toLowerCase());
   const followers = Number(tweet.author?.followers ?? 0);
-  const engagement = (tweet.likeCount ?? 0) * 1.2 + (tweet.retweetCount ?? 0) * 2 + (tweet.quoteCount ?? 0) * 2.5 + (tweet.replyCount ?? 0) * 0.5;
+  const engagement =
+    (tweet.likeCount ?? 0) * 1.2 + (tweet.retweetCount ?? 0) * 2 + (tweet.quoteCount ?? 0) * 2.5 + (tweet.replyCount ?? 0) * 0.5;
+  const views = Number(tweet.viewCount ?? 0);
   const followerScore = followers >= 500000 ? 22 : followers >= 50000 ? 16 : followers >= 10000 ? 10 : followers >= 1000 ? 6 : 2;
   const engagementScore = engagement >= 200 ? 24 : engagement >= 80 ? 18 : engagement >= 35 ? 12 : engagement >= 15 ? 8 : 2;
-  return Math.min(100, 26 + (isTrustedAccount ? 22 : 0) + (tweet.author?.isBlueVerified ? 12 : 0) + followerScore + engagementScore);
+  const viewScore = views >= 200000 ? 18 : views >= 25000 ? 12 : views >= 5000 ? 8 : views >= 500 ? 4 : 0;
+  return Math.min(100, 18 + (isTrustedAccount ? 22 : 0) + (tweet.author?.isBlueVerified ? 12 : 0) + followerScore + engagementScore + viewScore);
 }
 
-export function isHighNoiseTweet(tweet: TwitterApiTweet, minLikes: number, minRetweets: number, allowReplies: boolean) {
+export function isHighNoiseTweet(
+  tweet: TwitterApiTweet,
+  thresholds: {
+    minLikes: number;
+    minRetweets: number;
+    minViews: number;
+    minFollowers: number;
+    allowReplies: boolean;
+  }
+) {
   const text = normalizeText(tweet.text || "");
   if (!tweet.author?.userName) return true;
   if (text.length < 30) return true;
-  if (!isOriginalTweet(tweet, allowReplies)) return true;
-  if (!hasEnoughEngagement(tweet, minLikes, minRetweets)) return true;
+  if (!isOriginalTweet(tweet, thresholds.allowReplies)) return true;
+  if (!hasEnoughEngagement(tweet, thresholds.minLikes, thresholds.minRetweets, thresholds.minViews)) return true;
+  if (!hasEnoughAuthorSignals(tweet, thresholds.minFollowers)) return true;
   return false;
 }
 
@@ -166,11 +183,21 @@ export const twitterApiAdapter: SourceAdapter = {
     const usernames = Array.isArray(context.source.config.usernames) ? context.source.config.usernames.map(String) : [];
     const userFetchLimit = Number(context.source.config.userFetchLimit ?? 4);
     const backoffMs = Number(context.source.config.backoffMs ?? 1200);
+    const strictMode = Boolean(context.source.config.strictMode ?? true);
     const queryType = String(context.source.config.queryType ?? "Top");
-    const minLikes = Number(context.source.config.minLikes ?? 15);
+    const minLikes = Number(context.source.config.minLikes ?? 10);
     const minRetweets = Number(context.source.config.minRetweets ?? 5);
+    const minViews = Number(context.source.config.minViews ?? 500);
+    const minFollowers = Number(context.source.config.minFollowers ?? 100);
     const allowReplies = Boolean(context.source.config.allowReplies ?? false);
     const collected: CandidateDocument[] = [];
+    const thresholds = {
+      minLikes,
+      minRetweets,
+      minViews,
+      minFollowers,
+      allowReplies
+    };
 
     try {
       const searchPayload = await fetchTwitterApi<TwitterApiResponse>(
@@ -184,31 +211,15 @@ export const twitterApiAdapter: SourceAdapter = {
         }
       );
       collected.push(
-        ...mapTwitterSearchResponse(context.source.key, context.source.label, context.source.kind, searchPayload, trustedAccounts)
-          .filter((item) => {
-            const metrics = (item.metadata.tweetMetrics as Record<string, unknown> | undefined) ?? {};
-            const authorSignals = (item.metadata.authorSignals as Record<string, unknown> | undefined) ?? {};
-            return !isHighNoiseTweet(
-              {
-                id: item.externalId,
-                url: item.url,
-                text: item.content,
-                likeCount: Number(metrics.likes ?? 0),
-                retweetCount: Number(metrics.reposts ?? 0),
-                replyCount: Number(metrics.replies ?? 0),
-                quoteCount: Number(metrics.quotes ?? 0),
-                viewCount: Number(metrics.views ?? 0),
-                author: {
-                  userName: item.author ?? undefined,
-                  isBlueVerified: Boolean(authorSignals.isBlueVerified),
-                  followers: Number(authorSignals.followers ?? 0)
-                }
-              },
-              minLikes,
-              minRetweets,
-              allowReplies
-            );
-          })
+        ...mapTwitterSearchResponse(
+          context.source.key,
+          context.source.label,
+          context.source.kind,
+          {
+            tweets: (searchPayload.tweets ?? []).filter((tweet) => !strictMode || !isHighNoiseTweet(tweet, thresholds))
+          },
+          trustedAccounts
+        )
           .slice(0, maxResults)
       );
     } catch (error) {
@@ -230,33 +241,19 @@ export const twitterApiAdapter: SourceAdapter = {
           }
         );
         collected.push(
-          ...mapTwitterSearchResponse(context.source.key, context.source.label, context.source.kind, userPayload, trustedAccounts).filter((item) => {
-            const metrics = (item.metadata.tweetMetrics as Record<string, unknown> | undefined) ?? {};
-            const authorSignals = (item.metadata.authorSignals as Record<string, unknown> | undefined) ?? {};
-            return (
-              `${item.title} ${item.content}`.toLowerCase().includes(context.monitor.query.toLowerCase()) &&
-              !isHighNoiseTweet(
-                {
-                  id: item.externalId,
-                  url: item.url,
-                  text: item.content,
-                  likeCount: Number(metrics.likes ?? 0),
-                  retweetCount: Number(metrics.reposts ?? 0),
-                  replyCount: Number(metrics.replies ?? 0),
-                  quoteCount: Number(metrics.quotes ?? 0),
-                  viewCount: Number(metrics.views ?? 0),
-                  author: {
-                    userName: item.author ?? undefined,
-                    isBlueVerified: Boolean(authorSignals.isBlueVerified),
-                    followers: Number(authorSignals.followers ?? 0)
-                  }
-                },
-                minLikes,
-                minRetweets,
-                allowReplies
+          ...mapTwitterSearchResponse(
+            context.source.key,
+            context.source.label,
+            context.source.kind,
+            {
+              tweets: (userPayload.tweets ?? []).filter(
+                (tweet) =>
+                  (!strictMode || !isHighNoiseTweet(tweet, thresholds)) &&
+                  `${tweet.text}`.toLowerCase().includes(context.monitor.query.toLowerCase())
               )
-            );
-          })
+            },
+            trustedAccounts
+          )
         );
         await wait(backoffMs);
       } catch (error) {

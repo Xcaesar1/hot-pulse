@@ -29,10 +29,10 @@ describe("twitterapi mapper", () => {
   });
 
   it("builds a strict advanced search query", () => {
-    expect(buildSearchQuery("gpt-5.4", 15, 5)).toContain("-filter:replies");
-    expect(buildSearchQuery("gpt-5.4", 15, 5)).toContain("-filter:retweets");
-    expect(buildSearchQuery("gpt-5.4", 15, 5)).toContain("min_faves:15");
-    expect(buildSearchQuery("gpt-5.4", 15, 5)).toContain("min_retweets:5");
+    expect(buildSearchQuery("gpt-5.4", 10, 5)).toContain("-filter:replies");
+    expect(buildSearchQuery("gpt-5.4", 10, 5)).toContain("-filter:retweets");
+    expect(buildSearchQuery("gpt-5.4", 10, 5)).toContain("min_faves:10");
+    expect(buildSearchQuery("gpt-5.4", 10, 5)).toContain("min_retweets:5");
   });
 
   it("filters reply noise and low-engagement tweets", () => {
@@ -46,13 +46,13 @@ describe("twitterapi mapper", () => {
           isReply: true,
           likeCount: 80,
           retweetCount: 20,
+          viewCount: 5000,
           author: {
-            userName: "someone"
+            userName: "someone",
+            followers: 500
           }
         },
-        15,
-        5,
-        false
+        { minLikes: 10, minRetweets: 5, minViews: 500, minFollowers: 100, allowReplies: false }
       )
     ).toBe(true);
 
@@ -66,13 +66,53 @@ describe("twitterapi mapper", () => {
           isReply: false,
           likeCount: 2,
           retweetCount: 0,
+          viewCount: 1200,
           author: {
-            userName: "someone"
+            userName: "someone",
+            followers: 500
           }
         },
-        15,
-        5,
-        false
+        { minLikes: 10, minRetweets: 5, minViews: 500, minFollowers: 100, allowReplies: false }
+      )
+    ).toBe(true);
+
+    expect(
+      isHighNoiseTweet(
+        {
+          id: "low-views",
+          url: "https://x.com/example/status/4",
+          text: "This post looks promising on the surface but still fails because nobody has really seen it yet in the timeline.",
+          createdAt: "2026-04-17T10:00:00.000Z",
+          isReply: false,
+          likeCount: 18,
+          retweetCount: 6,
+          viewCount: 240,
+          author: {
+            userName: "someone",
+            followers: 800
+          }
+        },
+        { minLikes: 10, minRetweets: 5, minViews: 500, minFollowers: 100, allowReplies: false }
+      )
+    ).toBe(true);
+
+    expect(
+      isHighNoiseTweet(
+        {
+          id: "low-followers",
+          url: "https://x.com/example/status/5",
+          text: "This post also fails because the account is still too small for our strict signal rules even though the tweet got some engagement.",
+          createdAt: "2026-04-17T10:00:00.000Z",
+          isReply: false,
+          likeCount: 18,
+          retweetCount: 6,
+          viewCount: 5000,
+          author: {
+            userName: "someone",
+            followers: 40
+          }
+        },
+        { minLikes: 10, minRetweets: 5, minViews: 500, minFollowers: 100, allowReplies: false }
       )
     ).toBe(true);
 
@@ -86,15 +126,14 @@ describe("twitterapi mapper", () => {
           isReply: false,
           likeCount: 30,
           retweetCount: 8,
+          viewCount: 20000,
           author: {
             userName: "openai",
             isBlueVerified: true,
             followers: 1000000
           }
         },
-        15,
-        5,
-        false
+        { minLikes: 10, minRetweets: 5, minViews: 500, minFollowers: 100, allowReplies: false }
       )
     ).toBe(false);
   });

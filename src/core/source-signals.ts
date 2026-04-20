@@ -6,6 +6,8 @@ export function getEvidenceFamily(sourceKey: string): EvidenceFamily {
     case "duckduckgo-search":
     case "google-news-rss":
     case "bing-search":
+    case "startpage-search":
+    case "brave-search":
       return "search_discovery";
     case "twitter-api":
       return "social";
@@ -35,6 +37,10 @@ export function getEvidenceQuality(document: CandidateDocument): number {
       ? 62
       : discoveryEngine === "bing-news"
         ? 58
+        : discoveryEngine === "startpage"
+          ? 56
+          : discoveryEngine === "brave-search"
+            ? 54
         : discoveryEngine === "duckduckgo"
           ? 52
           : getEvidenceFamily(document.sourceKey) === "official"

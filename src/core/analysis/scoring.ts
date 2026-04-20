@@ -6,6 +6,8 @@ const authorityWeights: Record<string, number> = {
   "twitter-api": 10,
   "google-news-rss": 16,
   "bing-search": 16,
+  "startpage-search": 15,
+  "brave-search": 14,
   "duckduckgo-search": 12,
   "hacker-news": 22,
   "reddit-search": 14,

@@ -197,12 +197,16 @@ async function seedDefaults() {
           !("backoffMs" in currentConfig) ||
           !("minLikes" in currentConfig) ||
           !("minRetweets" in currentConfig) ||
+          !("minViews" in currentConfig) ||
+          !("minFollowers" in currentConfig) ||
+          !("strictMode" in currentConfig) ||
           !("queryType" in currentConfig) ||
           String(currentConfig.usernames ?? "").includes("vercel"));
 
       const shouldRepairSearchSizing =
         (row.key === "duckduckgo-search" && Number(currentConfig.maxResults ?? 0) <= 4) ||
-        (row.key === "google-news-rss" && Number(currentConfig.maxResults ?? 0) <= 6);
+        (row.key === "google-news-rss" && Number(currentConfig.maxResults ?? 0) <= 6) ||
+        ((row.key === "startpage-search" || row.key === "brave-search") && Number(currentConfig.maxResults ?? 0) <= 0);
 
       if (shouldRepairCustomRss || shouldRepairTwitter || shouldRepairSearchSizing) {
         await db
