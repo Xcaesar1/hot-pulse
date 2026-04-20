@@ -2,6 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import type { CandidateDocument } from "@/core/contracts";
+import { parseLooseDate } from "@/core/freshness";
 import { extractArticle } from "@/core/extract";
 import type { SourceFetchContext } from "@/core/sources/base";
 import { domainFromUrl, hashString, normalizeCanonicalUrl, normalizeText, truncate, wait } from "@/core/utils";
@@ -11,6 +12,8 @@ export interface RawSearchResult {
   url: string;
   snippet: string;
   rank: number;
+  publishedAt: string | null;
+  publishedAtSource: "search_result" | "article_meta" | null;
 }
 
 export interface SearchHtmlProfile {
@@ -18,6 +21,7 @@ export interface SearchHtmlProfile {
   titleSelectors: string[];
   linkSelectors: string[];
   snippetSelectors: string[];
+  timeSelectors?: string[];
   skipHrefPatterns?: RegExp[];
 }
 
@@ -59,6 +63,16 @@ function matchesBlockedPattern(href: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(href));
 }
 
+function pickPublishedAt($: CheerioAPI, root: unknown, selectors: string[]): string | null {
+  for (const selector of selectors) {
+    const node = $(root as never).find(selector).first();
+    const rawValue = node.attr("datetime")?.trim() || node.attr("content")?.trim() || node.text().trim();
+    const parsed = parseLooseDate(rawValue);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 export async function fetchSearchHtml(url: string, params?: Record<string, string>): Promise<string> {
   const response = await searchClient.get<string>(url, {
     params,
@@ -78,6 +92,7 @@ export function parseHtmlSearchResults(html: string, baseUrl: string, profile: S
     const url = pickFirstHref($, node, profile.linkSelectors, baseUrl);
     const title = pickFirstText($, node, profile.titleSelectors);
     const snippet = pickFirstText($, node, profile.snippetSelectors);
+    const publishedAt = pickPublishedAt($, node, profile.timeSelectors ?? []);
     if (!url || !title) continue;
     if (!/^https?:\/\//i.test(url)) continue;
     if (blockedPatterns.length > 0 && matchesBlockedPattern(url, blockedPatterns)) continue;
@@ -90,7 +105,9 @@ export function parseHtmlSearchResults(html: string, baseUrl: string, profile: S
       title,
       url: canonicalUrl,
       snippet,
-      rank: index + 1
+      rank: index + 1,
+      publishedAt,
+      publishedAtSource: publishedAt ? "search_result" : null
     });
   }
 
@@ -122,7 +139,7 @@ export async function mapSearchResultsToCandidates(args: {
       snippet: truncate(article?.text || result.snippet || result.title, 220),
       content,
       author: null,
-      publishedAt: null,
+      publishedAt: result.publishedAt || article?.publishedAt || null,
       metadata: {
         discoveryEngine: args.discoveryEngine,
         evidenceFamily: "search_discovery",
@@ -130,6 +147,7 @@ export async function mapSearchResultsToCandidates(args: {
         canonicalDomain: domainFromUrl(canonicalUrl),
         rank: result.rank,
         query: args.context.monitor.query,
+        publishedAtSource: result.publishedAtSource || article?.publishedAtSource || "inferred",
         qualitySignals: {
           rank: result.rank,
           extracted: Boolean(article),

@@ -4,6 +4,8 @@ export type NotificationLevel = "high" | "medium" | "low";
 export type NotifyChannel = "inbox" | "email";
 export type ScanTrigger = "manual" | "scheduled" | "api";
 export type EvidenceFamily = "search_discovery" | "social" | "community" | "official";
+export type FreshnessState = "fresh" | "stale" | "unknown";
+export type HotspotCandidateState = "fresh_hotspot_candidate" | "stale_or_unknown_date_candidate";
 
 export interface MonitorRecord {
   id: string;
@@ -68,6 +70,8 @@ export interface HotspotEvidenceRecord {
   snippet: string;
   author: string | null;
   publishedAt: string | null;
+  freshnessState: FreshnessState;
+  isFreshEvidence: boolean;
   weight: number;
   qualityScore: number;
 }
@@ -82,6 +86,7 @@ export interface HotspotView {
   relevanceScore: number;
   credibilityRisk: number;
   noveltyScore: number;
+  freshnessScore: number;
   sourceDiversityScore: number;
   sourceAuthorityScore: number;
   sourceReliabilityScore: number;
@@ -91,6 +96,8 @@ export interface HotspotView {
   firstSeenAt: string;
   lastSeenAt: string;
   notified: boolean;
+  hasFreshPrimaryEvidence: boolean;
+  candidateState: HotspotCandidateState;
   monitorLabels: string[];
   evidence: HotspotEvidenceRecord[];
 }

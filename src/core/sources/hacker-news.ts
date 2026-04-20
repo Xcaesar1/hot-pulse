@@ -35,6 +35,7 @@ export const hackerNewsAdapter: SourceAdapter = {
       metadata: {
         query: context.monitor.query,
         evidenceFamily: "community",
+        publishedAtSource: "api",
         canonicalUrl: normalizeCanonicalUrl(item.url || `https://news.ycombinator.com/item?id=${item.objectID}`),
         canonicalDomain: domainFromUrl(item.url || `https://news.ycombinator.com/item?id=${item.objectID}`),
         qualitySignals: {

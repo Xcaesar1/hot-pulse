@@ -38,6 +38,7 @@ export const bingSearchAdapter: SourceAdapter = {
         metadata: {
           discoveryEngine: "bing-news",
           evidenceFamily: "search_discovery",
+          publishedAtSource: "rss",
           canonicalUrl,
           canonicalDomain: domainFromUrl(canonicalUrl),
           qualitySignals: {

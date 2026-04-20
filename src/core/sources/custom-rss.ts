@@ -34,6 +34,7 @@ export const customRssAdapter: SourceAdapter = {
               feedTitle: feed.title,
               feedUrl,
               evidenceFamily: "official",
+              publishedAtSource: "rss",
               canonicalUrl: normalizeCanonicalUrl(item.link || feed.link || feedUrl),
               canonicalDomain: domainFromUrl(item.link || feed.link || feedUrl),
               qualitySignals: {

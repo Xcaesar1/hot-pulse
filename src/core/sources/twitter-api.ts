@@ -101,6 +101,7 @@ function mapTweet(
     metadata: {
       discoveryEngine: "twitterapi.io",
       evidenceFamily: "social",
+      publishedAtSource: "api",
       canonicalUrl,
       canonicalDomain: "x.com",
       tweetMetrics: {

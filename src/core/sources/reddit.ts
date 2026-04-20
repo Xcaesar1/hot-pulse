@@ -45,6 +45,7 @@ async function fetchRssFallback(context: SourceFetchContext, maxResults: number)
             subreddit,
             fallback: "rss",
             evidenceFamily: "community",
+            publishedAtSource: "rss",
             canonicalUrl: normalizeCanonicalUrl(item.link || `https://www.reddit.com/r/${subreddit}/new/`),
             canonicalDomain: domainFromUrl(item.link || `https://www.reddit.com/r/${subreddit}/new/`),
             qualitySignals: {
@@ -98,6 +99,7 @@ export const redditAdapter: SourceAdapter = {
       metadata: {
         subreddit: child.data.subreddit,
         evidenceFamily: "community",
+        publishedAtSource: "api",
         canonicalUrl: normalizeCanonicalUrl(`https://www.reddit.com${child.data.permalink}`),
         canonicalDomain: domainFromUrl(`https://www.reddit.com${child.data.permalink}`),
         qualitySignals: {

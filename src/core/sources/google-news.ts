@@ -35,6 +35,7 @@ export const googleNewsAdapter: SourceAdapter = {
           categories: item.categories ?? [],
           discoveryEngine: "google-news",
           evidenceFamily: "search_discovery",
+          publishedAtSource: "rss",
           canonicalUrl,
           canonicalDomain: domainFromUrl(canonicalUrl),
           qualitySignals: {

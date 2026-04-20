@@ -1,7 +1,9 @@
 import { analyzeCandidate } from "@/core/ai/openrouter";
 import { buildHotspotFingerprint, computeScores } from "@/core/analysis/scoring";
 import type { CandidateDocument, HotspotEvidenceRecord, HotspotView, MonitorRecord, ScanTrigger, SourceRecord } from "@/core/contracts";
+import { annotateCandidateFreshness, getDocumentFreshness } from "@/core/freshness";
 import { getCandidateCanonicalUrl, getEvidenceFamily, getEvidenceIdentity, getEvidenceQuality } from "@/core/source-signals";
+import { getDiscoveryPriority } from "@/core/source-signals";
 import {
   completeScanRun,
   createScanRun,
@@ -38,11 +40,14 @@ export interface ScanResultSummary {
 
 async function collectCandidatesForMonitor(monitor: MonitorRecord, availableSources: SourceRecord[]) {
   const candidates: Array<{ source: SourceRecord; documents: CandidateDocument[] }> = [];
-  for (const source of availableSources) {
+  const orderedSources = [...availableSources].sort(
+    (left, right) => getDiscoveryPriority(right.key, right.config) - getDiscoveryPriority(left.key, left.config)
+  );
+  for (const source of orderedSources) {
     const adapter = getSourceAdapter(source.key);
     if (!adapter) continue;
     try {
-      const documents = await adapter.fetch({ monitor, source });
+      const documents = (await adapter.fetch({ monitor, source })).map((document) => annotateCandidateFreshness(document, source));
       candidates.push({ source, documents });
       await setSourceHealth(source.key, "ok", null);
     } catch (error) {
@@ -70,6 +75,7 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
       const sourceDocuments = await collectCandidatesForMonitor(monitor, enabledSources);
       for (const { source, documents } of sourceDocuments) {
         for (const document of documents) {
+          const freshness = getDocumentFreshness(document);
           summary.candidates += 1;
           const persistedCandidate = await insertCandidate(source.id, {
             externalId: document.externalId,
@@ -105,6 +111,8 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
             snippet: document.snippet,
             author: document.author,
             publishedAt: document.publishedAt,
+            freshnessState: freshness.freshnessState,
+            isFreshEvidence: freshness.isFresh,
             weight: 1,
             qualityScore: getEvidenceQuality(document)
           };
@@ -155,6 +163,9 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
               evidenceCount: pending.evidence.size,
               metadata: {
                 provisional: true,
+                freshnessScore: freshness.isFresh ? 100 : freshness.freshnessState === "unknown" ? 36 : 18,
+                hasFreshPrimaryEvidence: document.sourceKey === "twitter-api" && freshness.isFresh,
+                candidateState: freshness.isFresh ? "fresh_hotspot_candidate" : "stale_or_unknown_date_candidate",
                 lastProcessedAt: nowIso()
               }
             }),
@@ -200,6 +211,9 @@ export async function runScanCycle(trigger: ScanTrigger): Promise<ScanResultSumm
         metadata: {
           evidenceSources: [...new Set(evidenceList.map((item) => item.sourceKey))],
           evidenceFamilies: [...new Set(evidenceList.map((item) => item.evidenceFamily))],
+          freshnessScore: scores.freshnessScore,
+          hasFreshPrimaryEvidence: scores.hasFreshPrimaryEvidence,
+          candidateState: scores.candidateState,
           mergedAt: nowIso()
         }
       });

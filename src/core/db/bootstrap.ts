@@ -201,6 +201,8 @@ async function seedDefaults() {
           !("minFollowers" in currentConfig) ||
           !("strictMode" in currentConfig) ||
           !("queryType" in currentConfig) ||
+          !("freshnessWindowHours" in currentConfig) ||
+          !("discoveryPriority" in currentConfig) ||
           String(currentConfig.usernames ?? "").includes("vercel"));
 
       const shouldRepairSearchSizing =
@@ -208,7 +210,11 @@ async function seedDefaults() {
         (row.key === "google-news-rss" && Number(currentConfig.maxResults ?? 0) <= 6) ||
         ((row.key === "startpage-search" || row.key === "brave-search") && Number(currentConfig.maxResults ?? 0) <= 0);
 
-      if (shouldRepairCustomRss || shouldRepairTwitter || shouldRepairSearchSizing) {
+      const shouldRepairFreshnessConfig =
+        ["duckduckgo-search", "google-news-rss", "bing-search", "startpage-search", "brave-search", "hacker-news", "reddit-search", "github-releases", "custom-rss"].includes(row.key) &&
+        (!("freshnessWindowHours" in currentConfig) || !("allowUnknownDateCandidates" in currentConfig) || !("discoveryPriority" in currentConfig));
+
+      if (shouldRepairCustomRss || shouldRepairTwitter || shouldRepairSearchSizing || shouldRepairFreshnessConfig) {
         await db
           .update(sources)
           .set({

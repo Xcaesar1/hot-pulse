@@ -7,6 +7,7 @@ const startpageProfile = {
   titleSelectors: [".w-gl__result-title", "h3", ".result-title"],
   linkSelectors: ["a.w-gl__result-title", "a.result-link", "a[href]"],
   snippetSelectors: [".w-gl__description", ".result-desc", ".description", "p"],
+  timeSelectors: ["time", ".w-gl__result-date", ".result-date", ".meta"],
   skipHrefPatterns: [/\/sp\/search/i, /\/settings/i]
 };
 

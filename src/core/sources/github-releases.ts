@@ -28,6 +28,7 @@ export const githubReleasesAdapter: SourceAdapter = {
           metadata: {
             repository: repo,
             evidenceFamily: "official",
+            publishedAtSource: "rss",
             canonicalUrl: normalizeCanonicalUrl(item.link || `https://github.com/${repo}/releases`),
             canonicalDomain: domainFromUrl(item.link || `https://github.com/${repo}/releases`),
             qualitySignals: {

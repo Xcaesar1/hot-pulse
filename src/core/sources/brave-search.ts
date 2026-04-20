@@ -7,6 +7,7 @@ const braveProfile = {
   titleSelectors: [".title", "h2", ".heading", "a span"],
   linkSelectors: ["a.heading-serpresult", "a[href]"],
   snippetSelectors: [".description", ".snippet-description", ".excerpt", "p"],
+  timeSelectors: ["time", ".snippet-age", ".meta", ".description"],
   skipHrefPatterns: [/\/settings/i, /\/help/i, /\/search\?/i]
 };
 

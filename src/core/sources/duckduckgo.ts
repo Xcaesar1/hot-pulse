@@ -34,10 +34,11 @@ export const duckDuckGoAdapter: SourceAdapter = {
         snippet: truncate(article?.text || title, 220),
         content: article?.text || title,
         author: null,
-        publishedAt: null,
+        publishedAt: article?.publishedAt || null,
         metadata: {
           discoveryEngine: "duckduckgo",
           evidenceFamily: "search_discovery",
+          publishedAtSource: article?.publishedAtSource || "inferred",
           canonicalUrl,
           canonicalDomain: domainFromUrl(canonicalUrl),
           rank: index + 1,

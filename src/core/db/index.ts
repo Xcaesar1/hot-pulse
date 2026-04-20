@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import type {
   DashboardData,
+  FreshnessState,
   HotspotEvidenceRecord,
   HotspotView,
   MonitorRecord,
@@ -11,6 +12,7 @@ import type {
   SourceRecord
 } from "@/core/contracts";
 import { getEnvFlags } from "@/core/config";
+import { evaluateFreshness } from "@/core/freshness";
 import { ensureBootstrap, getDbBundle } from "@/core/db/client";
 import { bootstrapDatabase } from "@/core/db/bootstrap";
 import { candidateDocuments, hotspotEvidences, hotspots, monitors, notifications, scanRuns, sources } from "@/core/db/schema";
@@ -292,42 +294,53 @@ export async function listHotspots(): Promise<HotspotView[]> {
   const hotspotRows = await db.select().from(hotspots).orderBy(desc(hotspots.finalScore), desc(hotspots.lastSeenAt)).limit(50);
   const evidenceRows = await db.select().from(hotspotEvidences);
 
-  return hotspotRows.map((row) => ({
-    id: row.id,
-    fingerprint: row.fingerprint,
-    title: normalizeText(row.title),
-    canonicalUrl: row.canonicalUrl,
-    summary: normalizeText(row.summary),
-    notifyLevel: row.notifyLevel as NotificationLevel,
-    relevanceScore: row.relevanceScore,
-    credibilityRisk: row.credibilityRisk,
-    noveltyScore: row.noveltyScore,
-    sourceDiversityScore: row.sourceDiversityScore,
-    sourceAuthorityScore: row.sourceAuthorityScore,
-    sourceReliabilityScore: row.sourceReliabilityScore,
-    velocityScore: row.velocityScore,
-    finalScore: row.finalScore,
-    evidenceCount: row.evidenceCount,
-    firstSeenAt: row.firstSeenAt,
-    lastSeenAt: row.lastSeenAt,
-    notified: row.notified,
-    monitorLabels: safeJsonParse<string[]>(row.monitorLabels, []).map((item) => normalizeText(item)),
-    evidence: evidenceRows
-      .filter((item) => item.hotspotId === row.id)
-      .map((item) => ({
-        sourceKey: item.sourceKey,
-        sourceLabel: normalizeText(item.sourceLabel),
-        evidenceFamily: item.evidenceFamily as HotspotEvidenceRecord["evidenceFamily"],
-        discoverySource: normalizeText(item.discoverySource),
-        url: item.url,
-        title: normalizeText(item.title),
-        snippet: normalizeText(item.snippet),
-        author: item.author ? normalizeText(item.author) : null,
-        publishedAt: item.publishedAt,
-        weight: item.weight,
-        qualityScore: item.qualityScore
-      }))
-  }));
+  return hotspotRows.map((row) => {
+    const metadata = safeJsonParse<Record<string, unknown>>(row.metadata, {});
+    return {
+      id: row.id,
+      fingerprint: row.fingerprint,
+      title: normalizeText(row.title),
+      canonicalUrl: row.canonicalUrl,
+      summary: normalizeText(row.summary),
+      notifyLevel: row.notifyLevel as NotificationLevel,
+      relevanceScore: row.relevanceScore,
+      credibilityRisk: row.credibilityRisk,
+      noveltyScore: row.noveltyScore,
+      freshnessScore: Number(metadata.freshnessScore ?? 0),
+      sourceDiversityScore: row.sourceDiversityScore,
+      sourceAuthorityScore: row.sourceAuthorityScore,
+      sourceReliabilityScore: row.sourceReliabilityScore,
+      velocityScore: row.velocityScore,
+      finalScore: row.finalScore,
+      evidenceCount: row.evidenceCount,
+      firstSeenAt: row.firstSeenAt,
+      lastSeenAt: row.lastSeenAt,
+      notified: row.notified,
+      hasFreshPrimaryEvidence: Boolean(metadata.hasFreshPrimaryEvidence ?? false),
+      candidateState: (metadata.candidateState as HotspotView["candidateState"] | undefined) ?? "stale_or_unknown_date_candidate",
+      monitorLabels: safeJsonParse<string[]>(row.monitorLabels, []).map((item) => normalizeText(item)),
+      evidence: evidenceRows
+        .filter((item) => item.hotspotId === row.id)
+        .map((item) => {
+          const freshness = evaluateFreshness(item.publishedAt);
+          return {
+            sourceKey: item.sourceKey,
+            sourceLabel: normalizeText(item.sourceLabel),
+            evidenceFamily: item.evidenceFamily as HotspotEvidenceRecord["evidenceFamily"],
+            discoverySource: normalizeText(item.discoverySource),
+            url: item.url,
+            title: normalizeText(item.title),
+            snippet: normalizeText(item.snippet),
+            author: item.author ? normalizeText(item.author) : null,
+            publishedAt: item.publishedAt,
+            freshnessState: freshness.freshnessState as FreshnessState,
+            isFreshEvidence: freshness.isFresh,
+            weight: item.weight,
+            qualityScore: item.qualityScore
+          };
+        })
+    };
+  });
 }
 
 export async function createNotification(payload: Omit<NotificationView, "id" | "createdAt">) {
