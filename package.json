@@ -1,0 +1,51 @@
+{
+  "name": "hot-pulse",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "worker": "tsx src/worker/index.ts",
+    "scan": "tsx src/worker/run-once.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/core/db/migrate.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.15",
+    "@mozilla/readability": "^0.6.0",
+    "cheerio": "^1.1.2",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.44.5",
+    "jsdom": "^27.0.1",
+    "lucide-react": "^0.539.0",
+    "motion": "^12.38.0",
+    "next": "^16.0.3",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "rss-parser": "^3.13.0",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.13",
+    "@types/node": "^24.4.0",
+    "@types/nodemailer": "^7.0.3",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "drizzle-kit": "^0.31.4",
+    "eslint": "^9.35.0",
+    "eslint-config-next": "^16.0.3",
+    "tailwindcss": "^4.1.13",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
