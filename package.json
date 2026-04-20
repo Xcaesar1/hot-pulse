@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval:relevance": "tsx src/core/ai/evaluate-relevance.ts",
     "worker": "tsx src/worker/index.ts",
     "scan": "tsx src/worker/run-once.ts",
     "db:generate": "drizzle-kit generate",

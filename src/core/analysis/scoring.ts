@@ -1,4 +1,11 @@
-import type { AIAnalysisResult, CandidateDocument, HotspotCandidateState, HotspotEvidenceRecord, NotificationLevel } from "@/core/contracts";
+import type {
+  AIAnalysisResult,
+  CandidateDocument,
+  HotspotCandidateState,
+  HotspotEvidenceRecord,
+  MonitorMode,
+  NotificationLevel
+} from "@/core/contracts";
 import { computeFreshnessScore, getHotspotCandidateState, hasFreshPrimaryEvidence } from "@/core/freshness";
 import { getCandidateCanonicalDomain, getCandidateCanonicalUrl } from "@/core/source-signals";
 import { clamp, domainFromUrl } from "@/core/utils";
@@ -26,6 +33,7 @@ export function buildHotspotFingerprint(candidate: CandidateDocument, query: str
 export function computeScores(args: {
   analysis: AIAnalysisResult;
   evidence: HotspotEvidenceRecord[];
+  monitorMode?: MonitorMode;
 }): {
   finalScore: number;
   freshnessScore: number;
@@ -58,6 +66,12 @@ export function computeScores(args: {
   );
   const velocityScore = clamp(freshEvidence.length * 20 + Math.max(args.evidence.length - freshEvidence.length, 0) * 6, 0, 100);
   const trustScore = 100 - args.analysis.credibilityRisk;
+  const strictKeywordBonus =
+    args.monitorMode === "keyword"
+      ? (args.analysis.keywordMentioned ? 10 : -12) +
+        (args.analysis.matchType === "exact" ? 8 : args.analysis.matchType === "alias" ? 4 : -8) -
+        Math.min(args.analysis.missingRequiredTerms.length, 3) * 6
+      : 0;
   const baseScore =
     args.analysis.relevanceScore * 0.31 +
     trustScore * 0.16 +
@@ -69,7 +83,7 @@ export function computeScores(args: {
     velocityScore * 0.04;
   const freshnessBias = freshPrimary ? 8 : hasFreshReliableEvidence ? 4 : 0;
   const stalenessPenalty = freshEvidence.length === 0 ? 18 : freshnessScore < 40 ? 8 : 0;
-  const finalScore = clamp(baseScore + freshnessBias - stalenessPenalty);
+  const finalScore = clamp(baseScore + freshnessBias + strictKeywordBonus - stalenessPenalty);
 
   let notifyLevel: NotificationLevel = "low";
   if (
@@ -78,6 +92,7 @@ export function computeScores(args: {
     hasNonSearchFamily &&
     args.analysis.credibilityRisk <= 45 &&
     freshEvidence.length > 0 &&
+    (args.monitorMode !== "keyword" || (args.analysis.keywordMentioned && (args.analysis.matchType === "exact" || args.analysis.matchType === "alias"))) &&
     (freshPrimary || hasFreshReliableEvidence)
   ) {
     notifyLevel = "high";
@@ -87,6 +102,7 @@ export function computeScores(args: {
     uniqueFamilies.length >= 2 &&
     hasNonSearchFamily &&
     freshEvidence.length > 0 &&
+    (args.monitorMode !== "keyword" || (args.analysis.keywordMentioned && (args.analysis.matchType === "exact" || args.analysis.matchType === "alias"))) &&
     (freshPrimary || hasFreshReliableEvidence)
   ) {
     notifyLevel = "medium";

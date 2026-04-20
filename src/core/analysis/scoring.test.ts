@@ -6,8 +6,14 @@ describe("computeScores", () => {
     const now = new Date().toISOString();
     const result = computeScores({
       analysis: {
+        keywordMentioned: true,
         isRelevant: true,
         relevanceScore: 90,
+        matchType: "exact",
+        matchedTerms: ["claude code"],
+        missingRequiredTerms: [],
+        whyRelevant: "Direct keyword match",
+        whyNotRelevant: "None",
         credibilityRisk: 24,
         noveltyScore: 72,
         summary: "Summary",
@@ -64,8 +70,14 @@ describe("computeScores", () => {
     const now = new Date().toISOString();
     const result = computeScores({
       analysis: {
+        keywordMentioned: true,
         isRelevant: true,
         relevanceScore: 96,
+        matchType: "exact",
+        matchedTerms: ["claude code"],
+        missingRequiredTerms: [],
+        whyRelevant: "Direct keyword match",
+        whyNotRelevant: "None",
         credibilityRisk: 18,
         noveltyScore: 80,
         summary: "Summary",
@@ -102,8 +114,14 @@ describe("computeScores", () => {
     const now = new Date().toISOString();
     const result = computeScores({
       analysis: {
+        keywordMentioned: true,
         isRelevant: true,
         relevanceScore: 88,
+        matchType: "exact",
+        matchedTerms: ["openai"],
+        missingRequiredTerms: [],
+        whyRelevant: "Direct keyword match",
+        whyNotRelevant: "None",
         credibilityRisk: 20,
         noveltyScore: 70,
         summary: "Summary",
@@ -159,8 +177,14 @@ describe("computeScores", () => {
     const stale = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
     const result = computeScores({
       analysis: {
+        keywordMentioned: true,
         isRelevant: true,
         relevanceScore: 92,
+        matchType: "exact",
+        matchedTerms: ["claude code"],
+        missingRequiredTerms: [],
+        whyRelevant: "Direct keyword match",
+        whyNotRelevant: "None",
         credibilityRisk: 16,
         noveltyScore: 70,
         summary: "Summary",

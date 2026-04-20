@@ -364,6 +364,24 @@ export async function listHotspots(query?: Partial<HotspotListQuery>, mode: "das
       canonicalUrl: row.canonicalUrl,
       summary: normalizeText(row.summary),
       rawSnippet: metadata.rawSnippet ? normalizeText(String(metadata.rawSnippet)) : mappedEvidence.find((item) => item.snippet.trim().length > 0)?.snippet ?? null,
+      keywordMentioned: Boolean(metadata.keywordMentioned ?? false),
+      matchType:
+        metadata.matchType === "exact" ||
+        metadata.matchType === "alias" ||
+        metadata.matchType === "adjacent" ||
+        metadata.matchType === "weak" ||
+        metadata.matchType === "none"
+          ? (metadata.matchType as HotspotView["matchType"])
+          : "none",
+      matchedTerms: safeJsonParse<string[]>(JSON.stringify(metadata.matchedTerms ?? []), []).map((item) => normalizeText(String(item))),
+      missingRequiredTerms: safeJsonParse<string[]>(JSON.stringify(metadata.missingRequiredTerms ?? []), []).map((item) =>
+        normalizeText(String(item))
+      ),
+      queryExpansionTerms: safeJsonParse<string[]>(JSON.stringify(metadata.queryExpansionTerms ?? []), []).map((item) =>
+        normalizeText(String(item))
+      ),
+      whyRelevant: metadata.whyRelevant ? normalizeText(String(metadata.whyRelevant)) : null,
+      whyNotRelevant: metadata.whyNotRelevant ? normalizeText(String(metadata.whyNotRelevant)) : null,
       reasoning: metadata.reasoning ? normalizeText(String(metadata.reasoning)) : null,
       credibilityReasoning: metadata.credibilityReasoning ? normalizeText(String(metadata.credibilityReasoning)) : null,
       notifyLevel: row.notifyLevel as NotificationLevel,

@@ -20,9 +20,10 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Tag,
   ThumbsUp,
-  UserRoundCheck,
-  Waves
+  Waves,
+  XCircle
 } from "lucide-react";
 import type {
   AuthorSignals,
@@ -42,7 +43,7 @@ import { cn } from "@/lib/utils";
 const PAGE_SIZE = 8;
 
 const levelBadgeStyles: Record<NotificationLevel, string> = {
-  high: "border-amber-300 bg-amber-100 text-amber-600",
+  high: "border-amber-300 bg-amber-100 text-amber-700",
   medium: "border-blue-200 bg-blue-50 text-blue-700",
   low: "border-stone-200 bg-white text-stone-600"
 };
@@ -69,7 +70,21 @@ const timeRangeLabels: Record<HotspotTimeRange, string> = {
   all: "全部"
 };
 
-const reasonPreviewCount = 2;
+const matchTypeLabels: Record<HotspotView["matchType"], string> = {
+  exact: "直接提及",
+  alias: "别名命中",
+  adjacent: "相邻概念",
+  weak: "弱相关",
+  none: "未命中"
+};
+
+const matchTypeStyles: Record<HotspotView["matchType"], string> = {
+  exact: "border-violet-200 bg-violet-50 text-violet-700",
+  alias: "border-sky-200 bg-sky-50 text-sky-700",
+  adjacent: "border-stone-200 bg-paper-50 text-stone-600",
+  weak: "border-amber-200 bg-amber-50 text-amber-700",
+  none: "border-rose-200 bg-rose-50 text-rose-700"
+};
 
 export function HotspotBoard({
   hotspots,
@@ -85,15 +100,14 @@ export function HotspotBoard({
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
+  const [expandedHotspotId, setExpandedHotspotId] = useState<string | null>(null);
+  const [expandedReasoningIds, setExpandedReasoningIds] = useState<string[]>([]);
 
   const sourceOptions = useMemo(
-    () =>
-      sources
-        .map((source) => ({ value: source.key, label: source.label }))
-        .sort((left, right) => left.label.localeCompare(right.label, "zh-CN")),
+    () => sources.map((source) => ({ value: source.key, label: source.label })).sort((left, right) => left.label.localeCompare(right.label, "zh-CN")),
     [sources]
   );
-
+  const sourceLabelMap = useMemo(() => new Map(sourceOptions.map((item) => [item.value, item.label])), [sourceOptions]);
   const monitorOptions = useMemo(() => {
     const labels = new Set(monitors.map((item) => item.label));
     for (const hotspot of hotspots) {
@@ -102,22 +116,9 @@ export function HotspotBoard({
     return [...labels].sort((left, right) => left.localeCompare(right, "zh-CN"));
   }, [hotspots, monitors]);
 
-  const sourceLabelMap = useMemo(
-    () => new Map(sourceOptions.map((option) => [option.value, option.label])),
-    [sourceOptions]
-  );
-
   const totalPages = Math.max(1, Math.ceil(hotspots.length / PAGE_SIZE));
   const currentPage = Math.min(Math.max(query.page, 1), totalPages);
   const pagedHotspots = hotspots.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const visibleHotspotIds = pagedHotspots.map((item) => item.id);
-
-  const [expandedHotspotId, setExpandedHotspotId] = useState<string | null>(null);
-  const [expandedReasoningIds, setExpandedReasoningIds] = useState<string[]>([]);
-
-  const resolvedExpandedHotspotId =
-    expandedHotspotId && pagedHotspots.some((item) => item.id === expandedHotspotId) ? expandedHotspotId : null;
-
   const visibleReasoningIds = pagedHotspots.filter((item) => hasAnyReasoning(item)).map((item) => item.id);
   const allReasoningsExpanded =
     visibleReasoningIds.length > 0 && visibleReasoningIds.every((item) => expandedReasoningIds.includes(item));
@@ -173,39 +174,35 @@ export function HotspotBoard({
     );
   }
 
-  function expandAllReasonings() {
-    setExpandedReasoningIds((current) => [...new Set([...current, ...visibleReasoningIds])]);
-  }
-
-  function collapseAllReasonings() {
-    setExpandedReasoningIds((current) => current.filter((item) => !visibleHotspotIds.includes(item)));
-  }
-
   return (
     <section className="grid gap-6">
       <div className="grid gap-4 rounded-[32px] border border-stone-200 bg-white/90 p-5 shadow-[0_24px_70px_rgba(35,31,27,0.08)] md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-500">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-600">
               <Flame className="h-3.5 w-3.5" />
               实时热点流
             </div>
-            <div className="space-y-1">
-              <h2 className="font-display text-3xl tracking-[-0.05em] text-ink-950 md:text-[2.5rem]">先判断，再决定值不值得跳出去</h2>
-              <p className="max-w-3xl text-sm leading-7 text-stone-600">
-                默认卡片优先展示 AI 摘要、原始摘录、发布时间、抓取时间、互动数据和通知状态，让你尽量在站内完成第一轮判断。
-              </p>
-            </div>
+            <h2 className="font-display text-3xl tracking-[-0.05em] text-ink-950 md:text-[2.5rem]">先看它和关键词什么关系，再决定要不要点开</h2>
+            <p className="max-w-3xl text-sm leading-7 text-stone-600">
+              AI 摘要会直接解释这条内容与监控词的关系，旁边同时展示直接提及状态、匹配类型、命中词和缺失词，尽量把第一轮判断留在站内完成。
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-stone-200 bg-paper-50 px-4 py-2 text-sm text-stone-600">当前结果 {hotspots.length} 条</span>
             {visibleReasoningIds.length > 0 ? (
               <button
-                type="button"
-                disabled={pending}
-                onClick={allReasoningsExpanded ? collapseAllReasonings : expandAllReasonings}
                 className="inline-flex h-11 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-ink-950 transition hover:border-stone-300 hover:bg-paper-50"
+                disabled={pending}
+                onClick={() =>
+                  setExpandedReasoningIds((current) =>
+                    allReasoningsExpanded
+                      ? current.filter((item) => !visibleReasoningIds.includes(item))
+                      : [...new Set([...current, ...visibleReasoningIds])]
+                  )
+                }
+                type="button"
               >
                 <Sparkles className="h-4 w-4" />
                 {allReasoningsExpanded ? "收起本页 AI 理由" : "展开本页 AI 理由"}
@@ -227,15 +224,15 @@ export function HotspotBoard({
             ).map(([sort, Icon]) => (
               <button
                 key={sort}
-                type="button"
-                disabled={pending}
-                onClick={() => replaceQuery({ sort })}
                 className={cn(
                   "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition",
                   query.sort === sort
                     ? "border-blue-200 bg-blue-50 text-blue-700"
                     : "border-stone-200 bg-paper-50 text-stone-600 hover:border-stone-300 hover:bg-white"
                 )}
+                disabled={pending}
+                onClick={() => replaceQuery({ sort })}
+                type="button"
               >
                 <Icon className="h-4 w-4" />
                 {sortLabels[sort]}
@@ -243,10 +240,10 @@ export function HotspotBoard({
             ))}
 
             <button
-              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-transparent px-2 text-sm text-stone-500 transition hover:text-ink-950"
               disabled={pending}
               onClick={resetFilters}
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-transparent px-2 text-sm text-stone-500 transition hover:text-ink-950"
+              type="button"
             >
               <RefreshCw className="h-4 w-4" />
               重置
@@ -254,45 +251,52 @@ export function HotspotBoard({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <SelectionMenu
-              label="信息来源"
-              summary={query.sources.length === 0 ? "全部来源" : summarizeOptions(query.sources, sourceLabelMap)}
-            >
-              {sourceOptions.map((source) => {
-                const active = query.sources.includes(source.value);
-                return (
-                  <ToggleRow key={source.value} active={active} label={source.label} onClick={() => toggleValue("sources", source.value)} />
-                );
-              })}
+            <SelectionMenu label="来源" summary={query.sources.length === 0 ? "全部来源" : summarizeOptions(query.sources, sourceLabelMap)}>
+              {sourceOptions.map((source) => (
+                <ToggleRow
+                  key={source.value}
+                  active={query.sources.includes(source.value)}
+                  label={source.label}
+                  onClick={() => toggleValue("sources", source.value)}
+                />
+              ))}
             </SelectionMenu>
 
             <SelectionMenu
               label="重要性"
               summary={query.levels.length === 3 ? "全部等级" : query.levels.map((level) => level.toUpperCase()).join(" / ")}
             >
-              {(["high", "medium", "low"] as NotificationLevel[]).map((level) => {
-                const active = query.levels.includes(level);
-                return <ToggleRow key={level} active={active} label={level.toUpperCase()} onClick={() => toggleValue("levels", level)} />;
-              })}
+              {(["high", "medium", "low"] as NotificationLevel[]).map((level) => (
+                <ToggleRow
+                  key={level}
+                  active={query.levels.includes(level)}
+                  label={level.toUpperCase()}
+                  onClick={() => toggleValue("levels", level)}
+                />
+              ))}
             </SelectionMenu>
 
             <SelectionMenu label="关键词" summary={query.monitors.length === 0 ? "全部关键词" : `${query.monitors.length} 个已选`}>
-              {monitorOptions.map((label) => {
-                const active = query.monitors.includes(label);
-                return <ToggleRow key={label} active={active} label={label} onClick={() => toggleValue("monitors", label)} />;
-              })}
+              {monitorOptions.map((label) => (
+                <ToggleRow
+                  key={label}
+                  active={query.monitors.includes(label)}
+                  label={label}
+                  onClick={() => toggleValue("monitors", label)}
+                />
+              ))}
             </SelectionMenu>
 
             <SelectionMenu label="时间范围" summary={timeRangeLabels[query.timeRange]}>
               {Object.entries(timeRangeLabels).map(([value, label]) => (
                 <button
                   key={value}
-                  type="button"
-                  onClick={() => replaceQuery({ timeRange: value as HotspotTimeRange })}
                   className={cn(
                     "w-full rounded-2xl px-3 py-2 text-left text-sm transition",
                     query.timeRange === value ? "bg-blue-50 text-blue-700" : "text-stone-600 hover:bg-stone-100"
                   )}
+                  onClick={() => replaceQuery({ timeRange: value as HotspotTimeRange })}
+                  type="button"
                 >
                   {label}
                 </button>
@@ -314,40 +318,38 @@ export function HotspotBoard({
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {hotspots.length === 0 ? (
-          <div className="rounded-[32px] border border-stone-200 bg-white/90 p-8 shadow-[0_24px_70px_rgba(35,31,27,0.08)]">
-            <h3 className="font-display text-3xl tracking-[-0.04em] text-ink-950">当前视图下暂无值得立即处理的热点</h3>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-stone-600">
-              这通常意味着时间窗口较窄，或者当前筛选条件已经把噪音压得很低。你可以先放宽时间范围，或者恢复默认视图再看一轮全局机会。
-            </p>
+      {hotspots.length === 0 ? (
+        <div className="rounded-[32px] border border-stone-200 bg-white/90 p-8 shadow-[0_24px_70px_rgba(35,31,27,0.08)]">
+          <h3 className="font-display text-3xl tracking-[-0.04em] text-ink-950">当前视图下暂无值得立即处理的热点</h3>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-stone-600">
+            这通常意味着当前筛选条件已经把噪音压得很低。你可以先放宽时间窗口，或者切回默认视图看看全局热点。
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 2xl:grid-cols-2">
+            {pagedHotspots.map((hotspot) => (
+              <HotspotCard
+                key={hotspot.id}
+                expanded={expandedHotspotId === hotspot.id}
+                hotspot={hotspot}
+                reasoningExpanded={expandedReasoningIds.includes(hotspot.id)}
+                onToggle={() => setExpandedHotspotId((current) => (current === hotspot.id ? null : hotspot.id))}
+                onToggleReasoning={() => toggleReasoning(hotspot.id)}
+              />
+            ))}
           </div>
-        ) : (
-          <>
-            <div className="grid gap-4 2xl:grid-cols-2">
-              {pagedHotspots.map((hotspot) => (
-                <HotspotCard
-                  key={hotspot.id}
-                  expanded={resolvedExpandedHotspotId === hotspot.id}
-                  reasoningExpanded={expandedReasoningIds.includes(hotspot.id)}
-                  hotspot={hotspot}
-                  onToggle={() => setExpandedHotspotId((current) => (current === hotspot.id ? null : hotspot.id))}
-                  onToggleReasoning={() => toggleReasoning(hotspot.id)}
-                />
-              ))}
-            </div>
 
-            <PaginationBar
-              currentPage={currentPage}
-              end={Math.min(currentPage * PAGE_SIZE, hotspots.length)}
-              start={hotspots.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}
-              total={hotspots.length}
-              totalPages={totalPages}
-              onChange={(page) => replaceQuery({ page }, { preservePage: true })}
-            />
-          </>
-        )}
-      </div>
+          <PaginationBar
+            currentPage={currentPage}
+            end={Math.min(currentPage * PAGE_SIZE, hotspots.length)}
+            onChange={(page) => replaceQuery({ page }, { preservePage: true })}
+            start={hotspots.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}
+            total={hotspots.length}
+            totalPages={totalPages}
+          />
+        </>
+      )}
     </section>
   );
 }
@@ -368,6 +370,7 @@ function HotspotCard({
   const leadEvidence = getLeadEvidence(hotspot);
   const interactionMetrics = leadEvidence?.interactionMetrics ?? null;
   const authorSignals = leadEvidence?.authorSignals ?? null;
+  const distinctRawExcerpt = getDistinctRawExcerpt(hotspot);
 
   return (
     <article className="rounded-[32px] border border-stone-200 bg-white/92 p-5 shadow-[0_24px_70px_rgba(35,31,27,0.08)] transition hover:border-stone-300 md:p-6">
@@ -379,9 +382,21 @@ function HotspotCard({
                 {levelLabels[hotspot.notifyLevel]}
               </span>
               {leadEvidence ? <MetaTag>{leadEvidence.sourceLabel}</MetaTag> : null}
-              {hotspot.monitorLabels.slice(0, reasonPreviewCount).map((label) => (
+              {hotspot.monitorLabels.slice(0, 2).map((label) => (
                 <MetaTag key={`${hotspot.id}-${label}`}>{label}</MetaTag>
               ))}
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs",
+                  hotspot.keywordMentioned ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-stone-200 bg-paper-50 text-stone-600"
+                )}
+              >
+                <Tag className="h-3.5 w-3.5" />
+                {hotspot.keywordMentioned ? "直接提及" : "未直接提及"}
+              </span>
+              <span className={cn("inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs", matchTypeStyles[hotspot.matchType])}>
+                {matchTypeLabels[hotspot.matchType]}
+              </span>
               {hotspot.notified ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
                   <Bell className="h-3.5 w-3.5" />
@@ -397,9 +412,24 @@ function HotspotCard({
                 {hotspot.summary}
               </ContentBlock>
 
-              <ContentBlock label="原始摘录" tone="source">
-                {hotspot.rawSnippet ?? leadEvidence?.snippet ?? "当前来源没有提供可展示的原始摘录。"}
-              </ContentBlock>
+              {distinctRawExcerpt ? (
+                <ContentBlock label="原始摘录" tone="source">
+                  {distinctRawExcerpt}
+                </ContentBlock>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {hotspot.matchedTerms.map((term) => (
+                <TagChip key={`${hotspot.id}-match-${term}`} tone="good">
+                  命中 {term}
+                </TagChip>
+              ))}
+              {hotspot.missingRequiredTerms.map((term) => (
+                <TagChip key={`${hotspot.id}-missing-${term}`} tone="warn">
+                  缺失 {term}
+                </TagChip>
+              ))}
             </div>
 
             <div className="grid gap-3 text-sm text-stone-600">
@@ -425,9 +455,9 @@ function HotspotCard({
           <div className="flex flex-wrap items-center gap-2">
             {hasAnyReasoning(hotspot) ? (
               <button
-                type="button"
-                onClick={onToggleReasoning}
                 className="inline-flex h-11 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm font-medium text-ink-950 transition hover:bg-white"
+                onClick={onToggleReasoning}
+                type="button"
               >
                 {reasoningExpanded ? "收起 AI 理由" : "展开 AI 理由"}
                 <ChevronDown className={cn("h-4 w-4 transition", reasoningExpanded && "rotate-180")} />
@@ -435,9 +465,9 @@ function HotspotCard({
             ) : null}
 
             <button
-              type="button"
-              onClick={onToggle}
               className="inline-flex h-11 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-ink-950 transition hover:border-stone-300 hover:bg-paper-50"
+              onClick={onToggle}
+              type="button"
             >
               {expanded ? "收起详情" : "展开详情"}
               <ChevronDown className={cn("h-4 w-4 transition", expanded && "rotate-180")} />
@@ -464,17 +494,10 @@ function HotspotCard({
 
 function ReasoningPanel({ hotspot }: { hotspot: HotspotView }) {
   return (
-    <div className="grid gap-4 rounded-[28px] border border-stone-200 bg-paper-50 p-5 md:grid-cols-2">
-      <ReasonCard
-        icon={Sparkles}
-        title="AI 为什么觉得它相关"
-        description={hotspot.reasoning ?? "当前还没有可展示的相关性理由。"}
-      />
-      <ReasonCard
-        icon={ShieldCheck}
-        title="AI 如何判断真实性"
-        description={hotspot.credibilityReasoning ?? "当前还没有可展示的真实性判断理由。"}
-      />
+    <div className="grid gap-4 rounded-[28px] border border-stone-200 bg-paper-50 p-5 md:grid-cols-3">
+      <ReasonCard icon={Sparkles} title="为什么相关" description={hotspot.whyRelevant ?? hotspot.reasoning ?? "当前还没有可展示的相关性说明。"} />
+      <ReasonCard icon={XCircle} title="为什么可能不稳" description={hotspot.whyNotRelevant ?? "当前还没有可展示的风险说明。"} />
+      <ReasonCard icon={ShieldCheck} title="真实性判断" description={hotspot.credibilityReasoning ?? "当前还没有可展示的真实性判断理由。"} />
     </div>
   );
 }
@@ -483,7 +506,7 @@ function HotspotDetailPanel({ hotspot }: { hotspot: HotspotView }) {
   const leadEvidence = getLeadEvidence(hotspot);
 
   return (
-    <div className="grid gap-4 border-t border-stone-200 pt-5 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="grid gap-4 border-t border-stone-200 pt-5 xl:grid-cols-[1.2fr_0.8fr]">
       <div className="grid gap-4">
         <div className="rounded-[28px] border border-stone-200 bg-paper-50 p-5">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">
@@ -493,9 +516,9 @@ function HotspotDetailPanel({ hotspot }: { hotspot: HotspotView }) {
           <div className="mt-4 grid gap-3">
             <ScoreRow label="重要程度" value={importanceText(hotspot.notifyLevel)} />
             <ScoreRow label="相关性" value={`${hotspot.relevanceScore}%`} />
+            <ScoreRow label="匹配类型" value={matchTypeLabels[hotspot.matchType]} />
+            <ScoreRow label="直接提及" value={hotspot.keywordMentioned ? "是" : "否"} />
             <ScoreRow label="热度综合" value={String(hotspot.heatScore)} />
-            <ScoreRow label="可信度" value={`${100 - hotspot.credibilityRisk}%`} />
-            <ScoreRow label="多源确认" value={`${hotspot.evidenceCount} 条`} />
             <ScoreRow label="是否已通知" value={hotspot.notified ? "已发送通知" : "尚未通知"} />
           </div>
         </div>
@@ -503,10 +526,25 @@ function HotspotDetailPanel({ hotspot }: { hotspot: HotspotView }) {
         <div className="rounded-[28px] border border-stone-200 bg-paper-50 p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">多源证据</p>
-              <p className="mt-1 text-sm text-stone-600">不用跳回原站，你可以先看来源结构、原始摘录和账号信号，再决定是否值得继续深挖。</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">匹配证据</p>
+              <p className="mt-1 text-sm text-stone-600">你可以先看命中词、缺失词和查询扩展，再决定要不要回到原站继续深挖。</p>
             </div>
             <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs text-stone-600">{hotspot.evidenceCount} 条证据</span>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <TermGroup label="命中词" terms={hotspot.matchedTerms} tone="good" />
+            <TermGroup label="缺失词" terms={hotspot.missingRequiredTerms} tone="warn" />
+            <TermGroup label="查询扩展" terms={hotspot.queryExpansionTerms} tone="neutral" />
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-stone-200 bg-paper-50 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">多源证据</p>
+              <p className="mt-1 text-sm text-stone-600">先看来源结构、原始摘录和互动信号，再决定是否需要跳去原站。</p>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -525,7 +563,6 @@ function HotspotDetailPanel({ hotspot }: { hotspot: HotspotView }) {
             <InfoRow label="首次抓取" value={formatDateTime(hotspot.firstSeenAt)} />
             <InfoRow label="最近活跃" value={formatDateTime(hotspot.lastSeenAt)} />
             <InfoRow label="主证据新鲜度" value={hotspot.hasFreshPrimaryEvidence ? "新鲜" : "待确认"} />
-            <InfoRow label="候选状态" value={formatCandidateState(hotspot.candidateState)} />
           </div>
         </div>
 
@@ -613,12 +650,12 @@ function ToggleRow({
 }) {
   return (
     <button
-      type="button"
-      onClick={onClick}
       className={cn(
         "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm transition",
         active ? "bg-blue-50 text-blue-700" : "text-stone-600 hover:bg-stone-100"
       )}
+      onClick={onClick}
+      type="button"
     >
       <span>{label}</span>
       <span className={cn("h-2.5 w-2.5 rounded-full", active ? "bg-blue-600" : "bg-stone-300")} />
@@ -652,10 +689,10 @@ function PaginationBar({
 
       <div className="flex flex-wrap items-center gap-2">
         <button
-          type="button"
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
           disabled={currentPage <= 1}
           onClick={() => onChange(currentPage - 1)}
-          className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+          type="button"
         >
           <ArrowLeft className="h-4 w-4" />
           上一页
@@ -669,12 +706,12 @@ function PaginationBar({
           ) : (
             <button
               key={page}
-              type="button"
-              onClick={() => onChange(page)}
               className={cn(
                 "inline-flex h-10 min-w-10 items-center justify-center rounded-full border px-3 text-sm transition",
                 currentPage === page ? "border-blue-200 bg-blue-50 text-blue-700" : "border-stone-200 bg-white text-stone-600 hover:bg-paper-50"
               )}
+              onClick={() => onChange(page)}
+              type="button"
             >
               {page}
             </button>
@@ -682,10 +719,10 @@ function PaginationBar({
         )}
 
         <button
-          type="button"
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
           disabled={currentPage >= totalPages}
           onClick={() => onChange(currentPage + 1)}
-          className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-paper-50 px-4 text-sm text-ink-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+          type="button"
         >
           下一页
           <ArrowRight className="h-4 w-4" />
@@ -825,13 +862,51 @@ function AuthorSignalRow({
 
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
-      <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-600">
-        <UserRoundCheck className="h-3.5 w-3.5 text-stone-400" />
-        账号信息
-      </span>
       {tags.map((tag) => (
         <MetaTag key={tag}>{tag}</MetaTag>
       ))}
+    </div>
+  );
+}
+
+function TagChip({
+  tone,
+  children
+}: {
+  tone: "good" | "warn" | "neutral";
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded-full border px-3 py-1 text-xs",
+        tone === "good"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : tone === "warn"
+            ? "border-amber-200 bg-amber-50 text-amber-700"
+            : "border-stone-200 bg-paper-50 text-stone-600"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function TermGroup({
+  label,
+  terms,
+  tone
+}: {
+  label: string;
+  terms: string[];
+  tone: "good" | "warn" | "neutral";
+}) {
+  return (
+    <div className="grid gap-2 rounded-[22px] border border-stone-200 bg-white p-4">
+      <p className="text-sm font-semibold text-ink-950">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {terms.length > 0 ? terms.map((term) => <TagChip key={`${label}-${term}`} tone={tone}>{term}</TagChip>) : <MetaTag>暂无</MetaTag>}
+      </div>
     </div>
   );
 }
@@ -886,8 +961,37 @@ function getLeadEvidence(hotspot: HotspotView) {
   return hotspot.evidence.find((item) => item.interactionMetrics || item.authorSignals) ?? hotspot.evidence[0] ?? null;
 }
 
+function getDistinctRawExcerpt(hotspot: HotspotView) {
+  const candidates = [hotspot.rawSnippet, ...hotspot.evidence.map((item) => item.snippet)];
+  return candidates.find((candidate) => isDistinctExcerpt(candidate, hotspot)) ?? null;
+}
+
+function isDistinctExcerpt(candidate: string | null | undefined, hotspot: HotspotView) {
+  if (!candidate) return false;
+
+  const excerpt = normalizeComparableText(candidate);
+  if (excerpt.length < 24) return false;
+
+  const summary = normalizeComparableText(hotspot.summary);
+  const title = normalizeComparableText(hotspot.title);
+
+  if (excerpt === summary || excerpt === title) return false;
+  if (summary.includes(excerpt) || excerpt.includes(summary)) return false;
+  if (title.includes(excerpt) || excerpt.includes(title)) return false;
+
+  return true;
+}
+
+function normalizeComparableText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .trim();
+}
+
 function hasAnyReasoning(hotspot: HotspotView) {
-  return Boolean(hotspot.reasoning || hotspot.credibilityReasoning);
+  return Boolean(hotspot.whyRelevant || hotspot.whyNotRelevant || hotspot.reasoning || hotspot.credibilityReasoning);
 }
 
 function formatEvidenceFamily(family: HotspotView["evidence"][number]["evidenceFamily"]) {
@@ -913,16 +1017,6 @@ function formatFreshnessState(state: HotspotEvidenceRecord["freshnessState"]) {
     case "unknown":
     default:
       return "时间未知";
-  }
-}
-
-function formatCandidateState(state: HotspotView["candidateState"]) {
-  switch (state) {
-    case "fresh_hotspot_candidate":
-      return "实时热点";
-    case "stale_or_unknown_date_candidate":
-    default:
-      return "待验证 / 时间不明";
   }
 }
 

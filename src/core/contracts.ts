@@ -8,6 +8,7 @@ export type FreshnessState = "fresh" | "stale" | "unknown";
 export type HotspotCandidateState = "fresh_hotspot_candidate" | "stale_or_unknown_date_candidate";
 export type HotspotSort = "heat" | "relevance" | "published" | "discovered" | "importance";
 export type HotspotTimeRange = "1h" | "6h" | "24h" | "7d" | "all";
+export type RelevanceMatchType = "exact" | "alias" | "adjacent" | "weak" | "none";
 
 export interface MonitorRecord {
   id: string;
@@ -53,8 +54,14 @@ export interface CandidateDocument {
 }
 
 export interface AIAnalysisResult {
+  keywordMentioned: boolean;
   isRelevant: boolean;
   relevanceScore: number;
+  matchType: RelevanceMatchType;
+  matchedTerms: string[];
+  missingRequiredTerms: string[];
+  whyRelevant: string;
+  whyNotRelevant: string;
   credibilityRisk: number;
   noveltyScore: number;
   summary: string;
@@ -107,6 +114,13 @@ export interface HotspotView {
   canonicalUrl: string;
   summary: string;
   rawSnippet: string | null;
+  keywordMentioned: boolean;
+  matchType: RelevanceMatchType;
+  matchedTerms: string[];
+  missingRequiredTerms: string[];
+  queryExpansionTerms: string[];
+  whyRelevant: string | null;
+  whyNotRelevant: string | null;
   reasoning: string | null;
   credibilityReasoning: string | null;
   notifyLevel: NotificationLevel;
