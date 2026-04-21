@@ -10,7 +10,6 @@ import {
   Bell,
   CalendarClock,
   ChevronDown,
-  Clock3,
   Eye,
   Filter,
   Flame,
@@ -42,18 +41,6 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 8;
 
-const levelBadgeStyles: Record<NotificationLevel, string> = {
-  high: "border-amber-300 bg-amber-100 text-amber-700",
-  medium: "border-blue-200 bg-blue-50 text-blue-700",
-  low: "border-stone-200 bg-white text-stone-600"
-};
-
-const levelLabels: Record<NotificationLevel, string> = {
-  high: "HIGH",
-  medium: "MEDIUM",
-  low: "LOW"
-};
-
 const sortLabels: Record<HotspotSort, string> = {
   heat: "热度综合",
   relevance: "相关性",
@@ -76,6 +63,18 @@ const matchTypeLabels: Record<HotspotView["matchType"], string> = {
   adjacent: "相邻概念",
   weak: "弱相关",
   none: "未命中"
+};
+
+const levelBadgeStyles: Record<NotificationLevel, string> = {
+  high: "border-amber-300 bg-amber-100 text-amber-700",
+  medium: "border-blue-200 bg-blue-50 text-blue-700",
+  low: "border-stone-200 bg-white text-stone-600"
+};
+
+const levelLabels: Record<NotificationLevel, string> = {
+  high: "HIGH",
+  medium: "MEDIUM",
+  low: "LOW"
 };
 
 const matchTypeStyles: Record<HotspotView["matchType"], string> = {
@@ -183,7 +182,7 @@ export function HotspotBoard({
               <Flame className="h-3.5 w-3.5" />
               实时热点流
             </div>
-            <h2 className="font-display text-3xl tracking-[-0.05em] text-ink-950 md:text-[2.5rem]">先看它和关键词什么关系，再决定要不要点开</h2>
+            <h2 className="font-display text-3xl tracking-[-0.05em] text-ink-950 md:text-[2.5rem]">先看它和关键词是什么关系，再决定要不要点开</h2>
             <p className="max-w-3xl text-sm leading-7 text-stone-600">
               AI 摘要会直接解释这条内容与监控词的关系，旁边同时展示直接提及状态、匹配类型、命中词和缺失词，尽量把第一轮判断留在站内完成。
             </p>
@@ -278,12 +277,7 @@ export function HotspotBoard({
 
             <SelectionMenu label="关键词" summary={query.monitors.length === 0 ? "全部关键词" : `${query.monitors.length} 个已选`}>
               {monitorOptions.map((label) => (
-                <ToggleRow
-                  key={label}
-                  active={query.monitors.includes(label)}
-                  label={label}
-                  onClick={() => toggleValue("monitors", label)}
-                />
+                <ToggleRow key={label} active={query.monitors.includes(label)} label={label} onClick={() => toggleValue("monitors", label)} />
               ))}
             </SelectionMenu>
 
@@ -435,8 +429,8 @@ function HotspotCard({
             <div className="grid gap-3 text-sm text-stone-600">
               <div className="flex flex-wrap gap-2">
                 <InfoPill icon={CalendarClock} label="发布时间" value={formatDateTime(hotspot.latestPublishedAt)} />
-                <InfoPill icon={Clock3} label="抓取时间" value={formatDateTime(hotspot.firstSeenAt)} />
-                <InfoPill icon={Search} label="最近活跃" value={formatDateTime(hotspot.lastSeenAt)} />
+                <InfoPill icon={Search} label="抓取时间" value={formatDateTime(hotspot.firstSeenAt)} />
+                <InfoPill icon={RefreshCw} label="最近活跃" value={formatDateTime(hotspot.lastSeenAt)} />
               </div>
 
               {interactionMetrics ? <InteractionRow metrics={interactionMetrics} /> : null}
@@ -742,12 +736,7 @@ function ContentBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-[24px] border px-4 py-3",
-        tone === "ai" ? "border-blue-100 bg-blue-50/70" : "border-stone-200 bg-paper-50"
-      )}
-    >
+    <div className={cn("rounded-[24px] border px-4 py-3", tone === "ai" ? "border-blue-100 bg-blue-50/70" : "border-stone-200 bg-paper-50")}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">{label}</p>
       <p className="mt-2 text-sm leading-7 text-stone-700">{children}</p>
     </div>
@@ -953,7 +942,6 @@ function buildPageList(currentPage: number, totalPages: number) {
   if (currentPage < totalPages - 2) pages.push("ellipsis");
 
   pages.push(totalPages);
-
   return pages;
 }
 

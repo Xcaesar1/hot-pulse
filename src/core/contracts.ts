@@ -9,6 +9,7 @@ export type HotspotCandidateState = "fresh_hotspot_candidate" | "stale_or_unknow
 export type HotspotSort = "heat" | "relevance" | "published" | "discovered" | "importance";
 export type HotspotTimeRange = "1h" | "6h" | "24h" | "7d" | "all";
 export type RelevanceMatchType = "exact" | "alias" | "adjacent" | "weak" | "none";
+export type DashboardView = "radar" | "monitors" | "search";
 
 export interface MonitorRecord {
   id: string;
@@ -193,4 +194,47 @@ export interface DashboardData {
     hasTwitterApi: boolean;
     hasEmail: boolean;
   };
+}
+
+export interface QuickSearchResult {
+  id: string;
+  query: string;
+  mode: MonitorMode;
+  title: string;
+  canonicalUrl: string;
+  summary: string;
+  rawSnippet: string | null;
+  keywordMentioned: boolean;
+  matchType: RelevanceMatchType;
+  matchedTerms: string[];
+  missingRequiredTerms: string[];
+  queryExpansionTerms: string[];
+  whyRelevant: string | null;
+  whyNotRelevant: string | null;
+  reasoning: string | null;
+  credibilityReasoning: string | null;
+  relevanceScore: number;
+  credibilityRisk: number;
+  noveltyScore: number;
+  freshnessScore: number;
+  heatScore: number;
+  sourceDiversityScore: number;
+  sourceAuthorityScore: number;
+  sourceReliabilityScore: number;
+  velocityScore: number;
+  finalScore: number;
+  latestPublishedAt: string | null;
+  capturedAt: string;
+  evidenceCount: number;
+  hasFreshPrimaryEvidence: boolean;
+  candidateState: HotspotCandidateState;
+  evidence: HotspotEvidenceRecord[];
+}
+
+export interface QuickSearchResponse {
+  query: string;
+  mode: MonitorMode;
+  searchedAt: string;
+  sourceCount: number;
+  results: QuickSearchResult[];
 }
