@@ -209,14 +209,22 @@ export function DashboardShell({
             {initialData.monitors.map((monitor) => {
               const activeFilter = hotspotQuery.monitors.includes(monitor.label);
               return (
-                <button
+                <div
+                  aria-pressed={activeFilter}
                   key={monitor.id}
                   className={cn(
-                    "grid gap-4 rounded-[28px] border p-5 text-left transition",
+                    "grid gap-4 rounded-[28px] border p-5 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-2 focus:ring-offset-paper-50",
                     activeFilter ? "border-blue-200 bg-blue-50/70" : "border-stone-200 bg-white hover:border-stone-300"
                   )}
                   onClick={() => toggleMonitorFilter(monitor.label)}
-                  type="button"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleMonitorFilter(monitor.label);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-2">
@@ -265,7 +273,7 @@ export function DashboardShell({
                     <SummaryMini label="频率" value={`${monitor.checkIntervalMinutes} 分钟`} />
                     {monitor.aliases.length > 0 ? <SummaryMini label="别名" value={`${monitor.aliases.length} 个`} /> : null}
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
